@@ -1,18 +1,18 @@
 import os
 import cv2
 import numpy as np
-from Tracker import CombinedTracker
-from GenerateAndMap import get_design_bgra, warp_and_blend, compute_pose_transform
-from ObjectSegmentation import ObjectSegmentation
-from data import landmark_names
-
-import streamlit as st
+from .Tracker import CombinedTracker
+from .GenerateImage import ImageGenerator
+from .ProjectImage import ProjectImage
+from .ObjectSegmentation import ObjectSegmentation
+from .data import landmark_names
 
 
 def smooth_pose_transform(prev_transform, curr_transform, alpha=0.9):
     if prev_transform is None or curr_transform is None:
         return curr_transform
     return alpha * prev_transform + (1 - alpha) * curr_transform
+
 
 def create_arm_mask(frame, result, side="right"):
     """
@@ -38,15 +38,15 @@ def create_arm_mask(frame, result, side="right"):
         if lm.visibility > 0.5:  # Filter by visibility threshold
             arm_points.append((int(lm.x * w), int(lm.y * h)))
 
-    if len(arm_points) < 3:  # Not enough points to form a valid region
+    if len(arm_points) < 3:
         print("[WARN] Insufficient landmarks for arm region.")
         return np.zeros(frame.shape[:2], dtype=np.uint8)
 
-    # Create a mask for the arm region
     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
     arm_points = np.array(arm_points, dtype=np.int32)
     cv2.fillPoly(mask, [arm_points], 255)
     return mask
+
 
 def run(cls):
     calibration_matrix = np.array([
@@ -55,25 +55,26 @@ def run(cls):
         [0, 0, 1]
     ])
 
+    # Initialize our classes
     tracker = CombinedTracker(
         calibration_matrix=calibration_matrix,
         capture_index=0,
         cls=cls,
         confidence_threshold=0.5
     )
-
     segmenter = ObjectSegmentation(plot=False)
+    image_generator = ImageGenerator(device="cuda")
+    project_image = ProjectImage(calibration_matrix)
 
-    # Improve the user input prompt and handle the design generation
+    # Get design input from user
     print("\nPlease describe your design:")
     design_prompt = input("> ")
     
-    # Add the missing answer_method parameter
-    design_bgra = get_design_bgra(
-        device="cuda",
-        is_tattoo=True,
+    # Generate the design using ImageGenerator class
+    design_bgra = image_generator.get_design_bgra(
+        answer_method="text",
         answer=design_prompt,
-        answer_method="text"  # Add the missing parameter
+        is_tattoo=True
     )
     
     if design_bgra is None:
@@ -98,70 +99,47 @@ def run(cls):
         if not ret:
             break
 
-        # Step 1: Get masks
+        # Get masks using tracker
         person_mask, nonperson_mask = tracker.get_masks_fullframe(frame)
         object_mask = person_mask if cls == 'person' else nonperson_mask
 
-        print("[DEBUG] Object Mask Unique Values:", np.unique(object_mask))
         if np.sum(object_mask) == 0:
             print("[WARN] Object mask is empty. Proceeding to next frame.")
 
-        if cls != 'person':
-            orb = cv2.ORB_create()
-            curr_keypoints, curr_descriptors = orb.detectAndCompute(frame, object_mask)
-            if prev_keypoints is not None and prev_descriptors is not None:
-                pose_transform = compute_pose_transform(prev_keypoints, curr_keypoints, prev_descriptors, curr_descriptors)
-                pose_transform = smooth_pose_transform(prev_pose_transform, pose_transform)
-                prev_pose_transform = pose_transform
-            prev_keypoints, prev_descriptors = curr_keypoints, curr_descriptors
-        else:
-            # Step 2: Use ObjectSegmentation to calculate pose_transform and mask
-            processed_frame, result = segmenter.body_segmentation(frame)  # Unpack correctly
+        if cls == 'person':
+            # Use ObjectSegmentation for person tracking
+            processed_frame, result = segmenter.body_segmentation(frame)
 
             if result.pose_world_landmarks:
-                # Extract current pose 3D landmarks
                 current_pose_3d = np.array([
                     (lm.x, lm.y, lm.z) for lm in result.pose_world_landmarks.landmark
                 ], dtype=np.float32)
 
                 if segmenter.initial_pose_3d is None:
-                    # Store the initial pose reference for alignment
                     segmenter.initial_pose_3d = current_pose_3d.copy()
                     print("[INFO] Stored initial 3D pose reference.")
                     pose_transform = None
                 else:
-                    # Compute rigid transformation (R, t) from reference to current pose
                     R, t = segmenter.find_rigid_transform(segmenter.initial_pose_3d, current_pose_3d)
-
-                    # Build the 4x4 transformation matrix
                     pose_transform = np.eye(4, dtype=np.float32)
                     pose_transform[:3, :3] = R
                     pose_transform[:3, 3] = t
-                    print("[DEBUG] Pose Transform Matrix:\n", pose_transform)
 
-                # Create a mask for the right arm (or left)
-                arm_mask = create_arm_mask(frame, result, side="right")  # Specify "right" or "left"
-                if np.sum(arm_mask) == 0:
-                    print("[WARN] Arm mask is empty. Proceeding with next frame.")
-                    #continue
-                else:
-                    object_mask = arm_mask  # Update the mask to use the arm mask
+                arm_mask = create_arm_mask(frame, result, side="right")
+                if np.sum(arm_mask) > 0:
+                    object_mask = arm_mask
             else:
-                print("[WARN] No 3D pose landmarks detected. Skipping pose transformation.")
+                print("[WARN] No 3D pose landmarks detected.")
                 pose_transform = None
                 object_mask = None
 
-        # Step 3: Warp and blend the design
+        # Project and blend the design using ProjectImage class
         if object_mask is not None and np.sum(object_mask) > 0:
             overlay = cv2.addWeighted(frame, 0.6, cv2.cvtColor(object_mask, cv2.COLOR_GRAY2BGR), 0.4, 0)
-            cv2.imshow("asd", overlay)
+            cv2.imshow("Mask Overlay", overlay)
 
-            if pose_transform is None:
-                print("[INFO] Using static placement due to missing pose transform.")
-                augmented_frame = warp_and_blend(frame, design_bgra, object_mask)
-            else:
-                augmented_frame = warp_and_blend(frame, design_bgra, object_mask, pose_transform)
-                print("asdkas?")
+            # Use ProjectImage class for warping and blending
+            augmented_frame = project_image.warp_and_blend(frame, design_bgra, object_mask)
             cv2.imshow("Augmented Frame", augmented_frame)
         else:            
             cv2.imshow("Augmented Frame", frame)
@@ -171,6 +149,7 @@ def run(cls):
 
     cap.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     run('bottle')

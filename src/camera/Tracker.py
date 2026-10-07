@@ -5,11 +5,10 @@ import torch
 from torchvision.models.detection import maskrcnn_resnet50_fpn
 from torchvision.transforms import functional as F
 
-from ObjectSegmentation import ObjectSegmentation
-from ObjectDetection import ObjectDetection
-from VisualOdometry import VisualOdometry
-
-from data import COCO_CLASSES
+from .ObjectSegmentation import ObjectSegmentation
+from .ObjectDetection import ObjectDetection
+from .VisualOdometry import VisualOdometry
+from .data import COCO_CLASSES
 
 class CombinedTracker:
     def __init__(self, calibration_matrix: np.ndarray, capture_index: int, cls: str, confidence_threshold: float=0.5):

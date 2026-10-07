@@ -3,7 +3,7 @@ import numpy as np
 import mediapipe as mp
 import matplotlib.pyplot as plt
 
-from data import landmark_names
+from .data import landmark_names
 
 class ObjectSegmentation:
     def __init__(self, plot: bool):
