@@ -1,0 +1,11 @@
+{
+  "scope": "Four semantic key centres selected by Codex visual inspection of source frame 1149 and a separate canonical model render. No dataset or predicted pose was used to select image coordinates. Requires human audit; not the 40-frame accuracy gate.",
+  "frame_id": 1149,
+  "canonical_camera": {"resolution": [1024, 400], "focal": [1400, 1400], "principal": [512, 200], "translation_mm": [0, 0, 650], "rotation": [[1, 0, 0], [0, 0, 1], [0, -1, 0]]},
+  "landmarks": [
+    {"id": "key_escape_center", "model_render_pixel": [95, 111], "source_pixel": [154, 615]},
+    {"id": "key_space_center", "model_render_pixel": [359, 311], "source_pixel": [362, 770]},
+    {"id": "key_main_enter_center", "model_render_pixel": [622, 228], "source_pixel": [540, 707]},
+    {"id": "key_numpad_enter_center", "model_render_pixel": [944, 268], "source_pixel": [757, 739]}
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "VisualizeIt.Editor",
+  "rootNamespace": "VisualizeIt.Editor",
+  "references": [
+    "VisualizeIt.Runtime", "VisualizeIt.Core", "Unity.XR.ARFoundation",
+    "Unity.XR.Management", "Unity.XR.Management.Editor",
+    "Unity.RenderPipelines.Universal.Runtime", "Unity.RenderPipelines.Universal.Editor"
+  ],
+  "includePlatforms": ["Editor"]
+}

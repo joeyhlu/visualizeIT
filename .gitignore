@@ -1,0 +1,15 @@
+.cache/
+mobile/Library/
+mobile/Temp/
+mobile/Logs/
+mobile/Obj/
+mobile/UserSettings/
+mobile/Builds/
+mobile/MemoryCaptures/
+mobile/*.csproj
+mobile/*.sln*
+mobile/.vs/
+native/build/
+artifacts/
+__pycache__/
+*.pyc

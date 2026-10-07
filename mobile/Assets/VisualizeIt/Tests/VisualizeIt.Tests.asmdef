@@ -1,0 +1,7 @@
+{
+  "name": "VisualizeIt.Tests",
+  "references": ["VisualizeIt.Core"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}

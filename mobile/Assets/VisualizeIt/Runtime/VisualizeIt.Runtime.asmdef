@@ -1,0 +1,8 @@
+{
+  "name": "VisualizeIt.Runtime",
+  "rootNamespace": "VisualizeIt",
+  "references": [
+    "VisualizeIt.Core", "Unity.XR.ARFoundation", "Unity.XR.ARSubsystems",
+    "Unity.XR.CoreUtils", "Unity.InputSystem", "Unity.ugui", "Unity.RenderPipelines.Universal.Runtime"
+  ]
+}

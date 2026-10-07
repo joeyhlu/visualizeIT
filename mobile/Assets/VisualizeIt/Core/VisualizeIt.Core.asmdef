@@ -1,0 +1,5 @@
+{
+  "name": "VisualizeIt.Core",
+  "rootNamespace": "VisualizeIt.Core",
+  "noEngineReferences": true
+}

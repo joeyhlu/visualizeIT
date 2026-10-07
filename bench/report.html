@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VisualizeIt · Mapping model</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#edf3ef;color:#143e36;font:16px/1.5 system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:30px 24px 60px}h1{font-size:clamp(28px,5vw,44px);line-height:1.15;margin:12px 0}h2{font-size:25px;margin:0 0 16px}.tag{font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase}.intro{max-width:780px;color:#4a6258}.note{padding:12px 16px;border-left:4px solid #c68b47;background:#fff9eb;color:#704514;margin:24px 0}section{margin-top:28px;background:#fff;border:1px solid #d2e1d6;border-radius:16px;padding:24px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:24px}.stage{border-radius:12px;overflow:hidden;background:#eff3f1;min-height:340px;display:flex;align-items:center}.stage img{width:100%;display:block}label{display:block;font-weight:600;margin:0 0 8px}select,button{font:inherit;border:1px solid #c8d8ce;border-radius:8px;padding:10px;background:#fff;color:#143e36;width:100%}button{background:#237669;color:#fff;margin:12px 0;cursor:pointer}input{width:100%;accent-color:#237669}.small{font-size:13px;color:#617168}.value{font-size:28px;font-weight:600}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:24px 0}.fact{background:#eaf3ed;padding:16px;border-radius:10px}.wide{width:100%;height:auto;display:block}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:14px;white-space:nowrap}th,td{text-align:left;padding:12px;border-bottom:1px solid #e2eae5}th{color:#657c6f;font-weight:600}.pass{color:#237669}.fail{color:#a15922}a{color:#216c61}details{margin-top:16px}summary{cursor:pointer;font-weight:600}@media(max-width:760px){main{padding:20px 14px}.layout{grid-template-columns:1fr}.stage{min-height:220px}.facts{grid-template-columns:1fr}section{padding:16px}h2{font-size:22px}}
+</style>
+<main>
+<div class="tag">VisualizeIt / geometry lab</div>
+<h1>A design attached to a surface</h1>
+<p class="intro">A working mathematical model for surface mapping: the app’s exported meshes, metre-based texture coordinates, a calibrated virtual camera, perspective-correct rendering, and controlled alignment errors.</p>
+<p class="note"><strong>Synthetic test bench.</strong> Camera poses and geometry are known inputs. This does not estimate object pose or establish phone AR quality.</p>
+<section>
+<h2>Inspect the model</h2>
+<div class="layout">
+<div class="stage"><img id="preview" src="orbit/000.png" alt="Checkerboard mapped onto a cylinder through a synthetic camera"></div>
+<div>
+<label for="view">Experiment</label>
+<select id="view"><option value="orbit">Camera orbit</option><option value="plane-mapped.png">Mapped plane</option><option value="box-mapped.png">Mapped box</option><option value="cylinder-mapped.png">Mapped cylinder</option><option value="incorrect-affine.png">Incorrect interpolation</option><option value="correct-perspective.png">Perspective corrected</option><option value="synthetic-occlusion.png">Synthetic occluder</option><option value="injected-error-5mm.png">5 mm error: reference vs estimate</option></select>
+<div id="orbit-controls"><button id="play" type="button">Play camera orbit</button><label for="frame">Camera angle <span id="angle">0°</span></label><input id="frame" type="range" min="0" max="23" value="0" step="1"></div>
+<p id="caption" class="small">Only the camera moves. Texture coordinates stay attached to the mesh.</p>
+<p class="small">All measured frames are 1280 × 720. The checkerboard contains 8 squares across each tile. Lighting here uses a basic diffuse model.</p>
+<a href="report.json">Download numerical report</a>
+</div></div>
+</section>
+<div class="facts"><div class="fact"><div class="small">Known position error</div><div class="value">3 mm</div><div id="three-mm">Calculating median sliding…</div></div><div class="fact"><div class="small">Known position error</div><div class="value">5 mm</div><div id="five-mm">Calculating median sliding…</div></div><div class="fact"><div class="small">C# fixture UV mapping</div><div class="value">&lt;0.02%</div><div>Maximum local scale error in these fixtures</div></div></div>
+<section><h2>Perspective, curvature, and visibility</h2><img class="wide" src="mapping-model.png" alt="Six rendered comparisons of surface mapping and synthetic occlusion"></section>
+<section><h2>Alignment sensitivity</h2><p id="orbit-summary" class="small">Measurements from a synthetic orbit. Zero error in the known-pose control is a consistency check, not tracking accuracy.</p><img class="wide" src="error-sensitivity.png" alt="Chart of median and 95th-percentile error for deliberate perturbations"><div class="table-wrap"><table><thead><tr><th>Injected condition</th><th>Median (px)</th><th>95th percentile (px)</th><th>Availability</th><th>Within simulated limits</th></tr></thead><tbody id="scores"></tbody></table></div><details><summary>What the model assumes</summary><ul id="assumptions"></ul><p class="small">Targets: median &lt;5 px, 95th percentile &lt;10 px, provisional availability ≥90%. Real geometry, lighting, depth and tracking must pass separate device tests.</p></details></section>
+</main>
+<script>
+const report = __REPORT_JSON__;
+const labels={exact_pose_control:'Known pose control',translation_3mm:'Position offset: 3 mm',translation_5mm:'Position offset: 5 mm',yaw_2deg:'Rotation offset: 2°',scale_plus_2percent:'Geometry scale: +2%',focal_plus_2percent:'Focal length: +2%',surface_lift_2mm:'Surface lift: 2 mm',surface_lift_0_25mm:'Surface lift: 0.25 mm',lost_3frames:'Hide 3 frames',stale_world_anchor:'Object moves; room anchor stays'};
+const descriptions={'orbit':'Only the camera moves. Texture coordinates stay attached to the mesh.','incorrect-affine.png':'Deliberately wrong: screen-space interpolation bends the pattern along the triangle boundary.','correct-perspective.png':'Perspective-correct interpolation matches independent ray-triangle intersections.','synthetic-occlusion.png':'An exact virtual depth buffer hides the design behind a synthetic card. This does not test phone depth.','injected-error-5mm.png':'Green points are known surface references; red points show a deliberately shifted 5 mm estimate.'};
+const preview=document.getElementById('preview'),view=document.getElementById('view'),slider=document.getElementById('frame'),play=document.getElementById('play');
+slider.max=report.orbitFrames-1;
+preview.alt=`Checkerboard mapped onto a ${report.benchmarkShape} through a synthetic camera`;
+document.getElementById('orbit-summary').textContent=`Measurements from a ${report.orbitFrames}-view ${report.benchmarkShape} orbit. Zero error in the known-pose control is a consistency check, not tracking accuracy.`;
+let timer=null;
+function update(){const i=Number(slider.value);preview.src=view.value==='orbit'?`orbit/${String(i).padStart(3,'0')}.png`:view.value;document.getElementById('angle').textContent=`${Math.round(i*360/report.orbitFrames)}°`;document.getElementById('caption').textContent=descriptions[view.value]||'Mesh and texture coordinates exported from the app’s C# geometry code.';document.getElementById('orbit-controls').hidden=view.value!=='orbit';}
+function stop(){clearInterval(timer);timer=null;play.textContent='Play camera orbit';}
+play.addEventListener('click',()=>{if(timer){stop();return;}play.textContent='Pause camera orbit';timer=setInterval(()=>{slider.value=(Number(slider.value)+1)%report.orbitFrames;update();},130);});
+slider.addEventListener('input',update);view.addEventListener('change',()=>{stop();update();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+for(const [key,score] of Object.entries(report.scenarios)){const tr=document.createElement('tr');for(const value of [labels[key]||key,score.medianErrorPixels.toFixed(2),score.p95ErrorPixels.toFixed(2),`${(score.trackingAvailability*100).toFixed(1)}%`,score.simulatedThresholdsMet?'Yes':'No']){const td=document.createElement('td');td.textContent=value;tr.appendChild(td);}tr.lastChild.className=score.simulatedThresholdsMet?'pass':'fail';document.getElementById('scores').appendChild(tr);}
+for(const item of report.assumptions){const li=document.createElement('li');li.textContent=item;document.getElementById('assumptions').appendChild(li);}
+document.getElementById('three-mm').textContent=`${report.scenarios.translation_3mm.medianErrorPixels.toFixed(1)} px median sliding`;
+document.getElementById('five-mm').textContent=`${report.scenarios.translation_5mm.medianErrorPixels.toFixed(1)} px median sliding`;
+update();
+</script>
+</html>

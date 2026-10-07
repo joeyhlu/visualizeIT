@@ -1,0 +1,3 @@
+-r requirements.txt
+xatlas==0.0.11
+opencv-python==4.13.0.92
