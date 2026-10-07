@@ -13,3 +13,5 @@ native/build/
 artifacts/
 __pycache__/
 *.pyc
+.env
+_pycache_
