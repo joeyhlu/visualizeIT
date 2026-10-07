@@ -1,4 +1,8 @@
+# Local caches and generated experiment reports
 .cache/
+artifacts/
+
+# Unity-generated files and builds
 mobile/Library/
 mobile/Temp/
 mobile/Logs/
@@ -9,9 +13,32 @@ mobile/MemoryCaptures/
 mobile/*.csproj
 mobile/*.sln*
 mobile/.vs/
+
+# Native build output
 native/build/
-artifacts/
+
+# Python caches, environments, and package output
 __pycache__/
-*.pyc
-.env
 _pycache_
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+*.egg-info/
+/build/
+/dist/
+
+# Local environment and secret files
+.env
+.env.*
+!.env.example
+
+# Downloaded model weights
+*.pt
+*.pth
+*.onnx
+*.safetensors
