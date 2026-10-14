@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>VisualizeIt prototype</title>
+<style>
+:root{color-scheme:dark;font:16px system-ui;background:#101819;color:#ecf6f3}body{max-width:1100px;margin:auto;padding:20px}h1{font-size:32px;margin:6px 0}p{line-height:1.5;color:#b9ccc6}.tag{color:#89dfbd;text-transform:uppercase;font-size:12px;letter-spacing:2px}.controls{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0}button,select{min-height:46px;background:#233735;color:inherit;border:1px solid #52766b;border-radius:8px;padding:10px 16px;font:inherit}button:disabled{opacity:.45}button.primary{background:#a9f2cf;color:#102b22}.panels{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;background:#182626;padding:12px;border-radius:12px}video,canvas{width:100%;display:block;background:#050909;border-radius:8px}figcaption{margin-top:12px;color:#c4d9d1;font-size:14px}.status{padding:15px;background:#243a34;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}.notes{border-top:1px solid #345046;padding-top:16px}a{color:#a9f2cf}@media(max-width:700px){body{padding:14px}.panels{grid-template-columns:1fr}.controls>*{flex:1 1 150px}h1{font-size:27px}}
+</style>
+<div class="tag">Experimental prototype · PC processing</div>
+<h1>VisualizeIt</h1>
+<p>Capture an object, process its image, and inspect the pose on the matching captured frame. The camera preview and delayed result are shown separately.</p>
+<div class="controls">
+<select id="asset" aria-label="Object"><option value="">Loading objects…</option></select>
+<select id="calibration" aria-label="Camera calibration"><option value="">Loading calibrations…</option></select>
+<button id="camera" class="primary">Start camera</button><button id="capture" disabled>Process frame</button>
+<button id="continuous" disabled>Start continuous capture</button><button id="stop" disabled>Stop camera</button>
+</div>
+<div id="status" role="status" class="status">Connecting to local inference service…</div>
+<div class="panels">
+<figure><video id="video" muted playsinline></video><figcaption>Current camera preview. Its display rate is not inference throughput.</figcaption></figure>
+<figure><canvas id="result" width="640" height="480"></canvas><figcaption id="caption">No processed frame yet. A result will only be drawn over its matching captured image.</figcaption></figure>
+</div>
+<p class="notes">This browser client requires HTTPS, a calibrated camera stream, and a prepared reference asset. Missing calibration suppresses pose output. Diagnostic wireframes do not establish foreground occlusion or independently measured attachment. Physical phone validation and sustained live 30 FPS remain unverified.</p>
+<p><a href="/demo/">Open the recorded benchmark report</a></p>
+<script>
+'use strict';
+const $=id=>document.getElementById(id), video=$('video'), display=$('result');
+let assets=[], calibrations=[], stream=null, session=crypto.randomUUID(), frameId=0, inFlight=false, continuous=false, stopped=false;
+let completed=0, validPoses=0, dropped=0, loopTimer=null, loopStarted=0;
+let cameraFrameId=null,cameraMediaTime=null,lastSentCameraFrameId=null;
+const status=text=>{$('status').textContent=text;};
+function selectedAsset(){return assets.find(a=>String(a.objectId)===$('asset').value);}
+function selectedCalibration(){return calibrations.find(c=>c.calibrationId===$('calibration').value);}
+async function refresh(){
+try{const response=await fetch('/v1/status',{cache:'no-store'});if(!response.ok)throw Error('Service unavailable');const data=await response.json();
+assets=data.assets||[];calibrations=(data.calibrations||[]).filter(c=>c.kind==='physical_measured');
+$('asset').replaceChildren(new Option('Select prepared object',''),...assets.map(a=>new Option(a.name,String(a.objectId))));
+$('calibration').replaceChildren(new Option('No measured camera calibration',''),...calibrations.map(c=>new Option(`${c.calibrationId} · ${c.width}×${c.height}`,c.calibrationId)));
+status(assets.length?'Service ready. Select an object and camera calibration.':'Service ready. No tracking assets are registered; run the benchmark onboarding stage first.');
+}catch(error){status(error.message+' — start the local service, then reload.');}}
+function updateButtons(){$('capture').disabled=!stream||inFlight;$('continuous').disabled=!stream;$('stop').disabled=!stream;$('camera').disabled=!!stream;}
+function suppressResult(reason){display.getContext('2d').clearRect(0,0,display.width,display.height);$('caption').textContent=reason+' · pose overlay suppressed.';}
+function stop(){continuous=false;stopped=true;clearTimeout(loopTimer);stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;session=crypto.randomUUID();cameraFrameId=null;lastSentCameraFrameId=null;$('continuous').textContent='Start continuous capture';suppressResult('Camera stopped');updateButtons();}
+function observeVideoFrame(now,metadata){if(!stream)return;cameraFrameId=metadata.presentedFrames;cameraMediaTime=metadata.mediaTime;video.requestVideoFrameCallback(observeVideoFrame);}
+$('camera').onclick=async()=>{try{if(!window.isSecureContext)throw Error('Camera access requires trusted HTTPS.');const c=selectedCalibration();
+const constraints={facingMode:{ideal:'environment'}};if(c){constraints.width={exact:c.width};constraints.height={exact:c.height};}
+stream=await navigator.mediaDevices.getUserMedia({audio:false,video:constraints});video.srcObject=stream;await video.play();session=crypto.randomUUID();frameId=0;stopped=false;
+if(video.requestVideoFrameCallback)video.requestVideoFrameCallback(observeVideoFrame);
+status('Camera ready. Check that lens, orientation, resolution and crop match the calibration.');updateButtons();}catch(error){stop();status(error.message);}};
+$('stop').onclick=stop;
+$('asset').onchange=()=>{session=crypto.randomUUID();frameId=0;lastSentCameraFrameId=null;completed=0;validPoses=0;suppressResult('Object changed');};$('calibration').onchange=()=>{stop();status('Calibration changed. Restart camera to request its declared resolution.');};
+async function processFrame(){
+if(!stream||stopped)return;if(inFlight){dropped++;return;}
+const a=selectedAsset(),c=selectedCalibration();if(!a){status('Select a prepared object first.');continuous=false;return;}
+if(continuous&&(cameraFrameId===null||cameraFrameId===lastSentCameraFrameId)){loopTimer=setTimeout(processFrame,10);return;}
+const captured=document.createElement('canvas');captured.width=video.videoWidth;captured.height=video.videoHeight;
+if(!captured.width||!captured.height)return;captured.getContext('2d').drawImage(video,0,0);
+const id=++frameId, requestSession=session, captureTime=performance.now()/1000;
+const packet={sessionId:requestSession,frameId:id,logicalIndex:id,captureTimestampSeconds:captureTime,timestampKind:'physical',objectId:a.objectId,referenceId:a.referenceId,
+calibrationId:c?.calibrationId||null,width:captured.width,height:captured.height,rgbJPEGBase64:captured.toDataURL('image/jpeg',.9).split(',')[1]};
+if(cameraFrameId!==null){packet.cameraFrameId=cameraFrameId;packet.cameraMediaTime=cameraMediaTime;lastSentCameraFrameId=cameraFrameId;}
+inFlight=true;updateButtons();const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+try{const response=await fetch('/v1/frames',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(packet),signal:controller.signal});const result=await response.json();
+if(requestSession!==session||stopped)return;
+if(!response.ok)throw Error(result.failureReason||result.error||'Processing failed');
+if(result.sessionId!==requestSession||result.frameId!==id||result.objectId!==a.objectId||result.referenceId!==a.referenceId||result.calibrationId!==packet.calibrationId)throw Error('Response identity mismatch; overlay suppressed.');
+display.width=captured.width;display.height=captured.height;const context=display.getContext('2d');context.drawImage(captured,0,0);
+if(result.poseState==='tracking'&&result.renderState==='diagnostic_wireframe'&&Array.isArray(result.projectionSegments)){
+context.strokeStyle='#a9f2cf';context.lineWidth=2;context.beginPath();for(const s of result.projectionSegments){if(s.length===4&&s.every(Number.isFinite)){context.moveTo(s[0],s[1]);context.lineTo(s[2],s[3]);}}context.stroke();}
+completed++;if(result.poseState==='tracking'&&result.freshCameraFrameVerified)validPoses++;const latency=performance.now()/1000-captureTime;
+$('caption').textContent=`Captured frame ${id} · capture-to-response ${latency.toFixed(2)} s · delayed snapshot · pose ${result.poseState} · mask ${result.maskState} · render ${result.renderState}`;
+const elapsed=loopStarted?(performance.now()-loopStarted)/1000:0;
+status(`Pose: ${result.poseState}\nMask: ${result.maskState}\nRender: ${result.renderState}\nReason: ${result.failureReason||'none'}\nProcessing: ${(1000*(result.processingSeconds||0)).toFixed(1)} ms\nCompleted camera results: ${completed}${elapsed?` · ${(completed/elapsed).toFixed(2)}/s`:''}\nBrowser fresh valid poses: ${validPoses}${elapsed?` · ${(validPoses/elapsed).toFixed(2)}/s`:''}\nDropped capture requests: ${dropped}\nNeural update rate: ${result.neuralUpdatesPerSecond??0}/s`);
+}catch(error){if(requestSession===session){suppressResult('Processing unavailable');status(error.name==='AbortError'?'Request timed out. Pose output unavailable.':error.message);}}
+finally{clearTimeout(timeout);inFlight=false;updateButtons();if(continuous&&stream)loopTimer=setTimeout(processFrame,0);}}
+$('capture').onclick=processFrame;
+$('continuous').onclick=()=>{if(!video.requestVideoFrameCallback){status('Continuous capture needs camera frame callbacks. Single-frame inspection remains available.');return;}continuous=!continuous;$('continuous').textContent=continuous?'Stop continuous capture':'Start continuous capture';if(continuous){completed=0;validPoses=0;dropped=0;loopStarted=performance.now();processFrame();}else clearTimeout(loopTimer);};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});window.addEventListener('pagehide',stop);
+refresh();
+</script></html>
