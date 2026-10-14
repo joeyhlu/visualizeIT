@@ -1,8 +1,10 @@
 # VisualizeIt
 
-VisualizeIt explores how designs can be mapped onto 3D objects. The active work is offline experimentation and comparison of prerecorded footage. The browser viewer plays saved frames, masks, and poses; it does not track a live camera.
+VisualizeIt explores how designs can be mapped onto 3D objects. The comparison viewer plays saved frames, masks, and poses from prerecorded footage; it does not track a live camera. The separate initialized prototype below provides PC frame processing and a browser camera client.
 
 Tracking and mapping results are experimental. Independent accuracy, broader object coverage, live performance, and phone validation remain unverified. The Unity mobile project is a deferred source scaffold, and the reconstruction server has not been implemented.
+
+An initialized geometric tracking prototype includes a local frame-processing service, a browser camera client, and frozen dataset-reference evaluations. See [prototype launch and evidence](docs/prototype.md). The ten-object run completed with zero quality passes. A later tracker repair passes synthetic controls; independent human accuracy, sustained live 30 FPS and physical-phone validation remain unmet.
 
 ## Run the offline tools
 
