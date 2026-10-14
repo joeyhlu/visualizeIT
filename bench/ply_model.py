@@ -1,11 +1,13 @@
 """Bounded ASCII PLY reader for the verified official BOP YCB models."""
 import numpy as np
+import io
 from .model import Mesh, Camera
 from .obj_model import Scan
 
 
 def read_ply(path, name):
-    with path.open(encoding='ascii') as source:
+    with (path.open(encoding='ascii') if hasattr(path, 'open')
+          else io.TextIOWrapper(path, encoding='ascii')) as source:
         if source.readline().strip() != 'ply' or source.readline().strip() != 'format ascii 1.0':
             raise ValueError('Expected the official ASCII BOP PLY variant.')
         props, count, faces_count, element = [], 0, 0, None
