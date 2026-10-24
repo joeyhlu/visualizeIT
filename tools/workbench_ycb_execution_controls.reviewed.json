@@ -1,0 +1,106 @@
+{
+  "schema": "workbench_ycb_execution_controls_reviewed_v1",
+  "adapter_sha256": "57a08ff834ceac404f3adbeed1561d1bb29dadfd23d3486caad75b2676f6d32b",
+  "gpu_reference_tool_sha256": "f9146ba71cda7b0ed97a5283705a15ecab7fb12be5033cfd7c6bede5e9a08225",
+  "proof_tool_sha256": "764f58f6ac93d4b85e89fdf41acb6dba944ddc4520a583439c3a3232c9676959",
+  "controls_tool_sha256": "5e2b3700d311020848111b60edf3964655bf8ed1db248f2fc6d80e51c0be97a9",
+  "contract": "execution-only supplemental YCB CAD control: both fixed opening frames pass the raw-PLY vs loaded-GLTF GPU reference with unchanged relative criteria and informative opposite discrimination, exact geometry/PNG/runtime provenance and parent qualitative RGB/render placement review; not independent correspondence, not full-UV serving_render_pass, no accuracy/mobile/automatic-preparation claim",
+  "entries": {
+    "2": {
+      "object_id": 2,
+      "canonical_ycb_id": "003_cracker_box",
+      "prepared_dir": ".cache/video-workbench/derived/uv-proof/attempt-02/object-000002",
+      "evidence_dir": ".cache/video-workbench/derived/gpu-reference/attempt-01/object-000002",
+      "prepared_sha256": "278c98b6a7249289c5d31ce03311b0d9400a40240956302027b28232712e02dd",
+      "evidence_record_sha256": "760fc377c4511e2cd029ad8aa2934c3a22641c5ba8a5297d338f468478cefcb8",
+      "candidate_glb_sha256": "a5d6e179b5020406a5f3f0143d3958cb4a3fda749863a89e2133d866356b65de",
+      "candidate_receipt_sha256": "26f70830c28614333c2098899a34f12dee5e00158e902ea2c646ef12d96989f7",
+      "png_sha256": "9a04bc0e7a10766e44aee4bdfc719462b0b6cc53d186bc6d4e8b890691acdf59",
+      "ply_sha256": "121df764d2214a16d59fd77a31e168ca9e79ba0f30a5e529de86c8cd19c1686f",
+      "manifest_sha256": "9b936de31c5511e3644e065538dedf47d0cdcd22f2ba17cee083e75a25403945",
+      "runtime_pins_sha256": "e78a85323194115a6b86580a12c251e5eaa7f8ffef6bead4f79d90fa4099a200",
+      "seed_frame_id": "s000370",
+      "principal_point_origin": "integer_centers",
+      "planned_out": ".cache/video-workbench/derived/execution-controls/v1/object-000002",
+      "bundle_sha256": "36e03dc140cf985d71bab1da142674d64e01c588ec7e0ef72dc50bb570cc59c6",
+      "qualitative_receipt": ".cache/video-workbench/derived/validation/ycb-000002-qualitative-review-v1.json",
+      "qualitative_receipt_sha256": "de7b6c4f6f8d2ee13a5a25a1d5e17b1eee967b867e3e3169a129a81602b5e46c",
+      "overlays": {
+        "361": {
+          "path": ".cache/video-workbench/derived/validation/ycb-000002-frame-000361-candidate-overlay.png",
+          "sha256": "61251cdf0b2f36e47116e77dbf06a3ef053395afc696fe72aca8fbae61df43d1"
+        },
+        "370": {
+          "path": ".cache/video-workbench/derived/validation/ycb-000002-frame-000370-candidate-overlay.png",
+          "sha256": "94c7f0ae04f709a3462e97a057f7546787e5db3f2b2faedd1c9ab2752ec43cdf"
+        }
+      },
+      "reviewed_by": "Codex parent; qualitative only, not independent labels",
+      "reviewed_at": "2026-10-21T06:58:15.173131+00:00"
+    },
+    "4": {
+      "object_id": 4,
+      "canonical_ycb_id": "005_tomato_soup_can",
+      "prepared_dir": ".cache/video-workbench/derived/uv-proof/attempt-02/object-000004",
+      "evidence_dir": ".cache/video-workbench/derived/gpu-reference/attempt-01/object-000004",
+      "prepared_sha256": "b01702f7505833c7b2dbefe00c7a6f7bd3408205e70639448f91fdb442454776",
+      "evidence_record_sha256": "9d43ec4e8f3905a8ec21f0435b1309f090880a952c36438690d86a19d7c35c22",
+      "candidate_glb_sha256": "2bc906380ceccda6f4524db667b4f90f13a43cf078f393ca6edf6751e9496e80",
+      "candidate_receipt_sha256": "d7fa080363df14b6acd9c99623372313f4c6dfb222ab364f497a57e5d6aefaec",
+      "png_sha256": "33183a894eb75ae04ae5188a3ae689fe8d06ec6b9f9624da1bf853c2a25e70d2",
+      "ply_sha256": "fea7ae381b760b4852463fce4effa53fe9535dc5c8c1ee89de2be85a30b32211",
+      "manifest_sha256": "9b936de31c5511e3644e065538dedf47d0cdcd22f2ba17cee083e75a25403945",
+      "runtime_pins_sha256": "e78a85323194115a6b86580a12c251e5eaa7f8ffef6bead4f79d90fa4099a200",
+      "seed_frame_id": "s000186",
+      "principal_point_origin": "integer_centers",
+      "planned_out": ".cache/video-workbench/derived/execution-controls/v1/object-000004",
+      "bundle_sha256": "d7798a1b88088bc1651d0385788e9220eb57951b340eb8aaa9f9c98315645740",
+      "qualitative_receipt": ".cache/video-workbench/derived/validation/ycb-000004-qualitative-review-v1.json",
+      "qualitative_receipt_sha256": "922394e026c77c612f539b6a139da545e244ec241d1c6ea77ef2a06e43443530",
+      "overlays": {
+        "177": {
+          "path": ".cache/video-workbench/derived/validation/ycb-000004-frame-000177-candidate-overlay.png",
+          "sha256": "08181be03b9084f399b57c16e88617e30e5a7cea26855410ef15f62211d9335d"
+        },
+        "186": {
+          "path": ".cache/video-workbench/derived/validation/ycb-000004-frame-000186-candidate-overlay.png",
+          "sha256": "be9dc0b25a52d7cda3d6380a721d26d23ce9fe0377bd44011d05af07d894ad63"
+        }
+      },
+      "reviewed_by": "Codex parent; qualitative only, not independent labels",
+      "reviewed_at": "2026-10-21T06:58:15.173131+00:00"
+    },
+    "18": {
+      "object_id": 18,
+      "canonical_ycb_id": "040_large_marker",
+      "prepared_dir": ".cache/video-workbench/derived/uv-proof/attempt-02/object-000018",
+      "evidence_dir": ".cache/video-workbench/derived/gpu-reference/attempt-01/object-000018",
+      "prepared_sha256": "352855c409ab9daa00a05dcc19ac0f41698a61705ecb80078aa7d2acbd2820c3",
+      "evidence_record_sha256": "ee55f78d270dcae926fa426f575cd14481faa88beebf434c7041f196f40499b5",
+      "candidate_glb_sha256": "980c1615a22799b4c14b430bf4c239ca8460a492efb286c8774e34ab8bc216a8",
+      "candidate_receipt_sha256": "08b11f7e8c8d0980985c477aa7425467092c53defd772814ecb220dcb22a20cd",
+      "png_sha256": "0351acbfd666baabc23261c3f7d5d7645c5b55bd47cef0dbc101572552c888fb",
+      "ply_sha256": "aa6f0f674e68e4affd95f7d21ae052539fe817590492d485f12e34dd80489a2a",
+      "manifest_sha256": "9b936de31c5511e3644e065538dedf47d0cdcd22f2ba17cee083e75a25403945",
+      "runtime_pins_sha256": "e78a85323194115a6b86580a12c251e5eaa7f8ffef6bead4f79d90fa4099a200",
+      "seed_frame_id": "s000184",
+      "principal_point_origin": "integer_centers",
+      "planned_out": ".cache/video-workbench/derived/execution-controls/v1/object-000018",
+      "bundle_sha256": "d5ff9a7cc10c2754342ddbc697e579b7d61576c1eda2d77d11d6266367185302",
+      "qualitative_receipt": ".cache/video-workbench/derived/validation/ycb-000018-qualitative-review-v1.json",
+      "qualitative_receipt_sha256": "e20add941bbe804695ca5d106f687b2bedc901adeada4fbfd011d519a02f0afc",
+      "overlays": {
+        "175": {
+          "path": ".cache/video-workbench/derived/validation/ycb-000018-frame-000175-candidate-overlay.png",
+          "sha256": "019bb6bddf0fb5bc0e82b422b95bdd33aded1c9bdaa519abba611059c0f839d8"
+        },
+        "184": {
+          "path": ".cache/video-workbench/derived/validation/ycb-000018-frame-000184-candidate-overlay.png",
+          "sha256": "965279395ec3bd7e9a3f0b50418fe2c49bf266158c7ff5eee81cb3c7c2a3dc5f"
+        }
+      },
+      "reviewed_by": "Codex parent; qualitative only, not independent labels",
+      "reviewed_at": "2026-10-21T06:58:15.173131+00:00"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "VisualizeIT",
+  "short_name": "VisualizeIT",
+  "description": "Experimental camera preview for mapping designs onto objects. Tracking is not validated.",
+  "id": "/camera",
+  "start_url": "/camera",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1712",
+  "theme_color": "#0f1712",
+  "icons": [
+    {
+      "src": "/phone-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/phone-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

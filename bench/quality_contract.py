@@ -306,6 +306,7 @@ class PoseCandidate:
     pixels_image: np.ndarray
     weights: np.ndarray
     source: str = 'refinement'
+    ranker_features: Mapping | None = None
 
 
 @dataclass(frozen=True)
@@ -330,7 +331,8 @@ class ValidationSettings:
 
 
 def _validate_candidate(candidate, frame, mask, settings, *, support_aware,
-                        sampling_valid=None, restricted_foreground=None):
+                        sampling_valid=None, restricted_foreground=None,
+                        include_ranker_stats=False):
     p = checked_pose(candidate.pose)
     xyz = np.asarray(candidate.points_object_m, float).reshape(-1, 3)
     uv = np.asarray(candidate.pixels_image, float).reshape(-1, 2)
@@ -372,6 +374,10 @@ def _validate_candidate(candidate, frame, mask, settings, *, support_aware,
     errors = np.linalg.norm(predicted-uv, axis=1)*720/h
     inliers = (z > .01) & np.isfinite(errors) & (errors <= settings.max_p95_error_720)
     count = int(inliers.sum()); stats['inliers'] = count
+    if include_ranker_stats:
+        stats['inlier_ratio'] = float(count / len(xyz))
+        stats['mean_inlier_confidence'] = (float(np.mean(weights[inliers]))
+                                           if count else None)
     if count < settings.min_inliers or count/len(xyz) < settings.min_inlier_ratio:
         return False, 'inconsistent_current_image_correspondences', stats
     e = errors[inliers]
@@ -393,7 +399,8 @@ def _validate_candidate(candidate, frame, mask, settings, *, support_aware,
     return True, None, stats
 
 
-def validate(candidate, frame, mask, settings=ValidationSettings()):
+def validate(candidate, frame, mask, settings=ValidationSettings(), *,
+             include_ranker_stats=False):
     """Validate against current RGB correspondences, never silhouette agreement.
 
     Mask rejection occurs before fitting. The refiner must likewise mask its
@@ -409,7 +416,8 @@ def validate(candidate, frame, mask, settings=ValidationSettings()):
     return _validate_candidate(
         candidate, frame, mask, settings, support_aware=capture_binding is not None,
         sampling_valid=(frame.sampling_valid if capture_binding is not None else None),
-        restricted_foreground=restricted_foreground)
+        restricted_foreground=restricted_foreground,
+        include_ranker_stats=include_ranker_stats)
 
 
 def validate_model_smoke(candidate, frame, mask, settings=ValidationSettings()):
@@ -429,6 +437,23 @@ def distinct_pose(a, b, settings):
     return angle > settings.recovery_rotation_degrees or np.linalg.norm(a[:3, 3]-b[:3, 3]) > settings.recovery_translation_m
 
 
+def _json_trace_value(value):
+    """Detach small inference diagnostics into finite JSON-compatible data."""
+    if isinstance(value, Mapping):
+        return {str(key): _json_trace_value(item) for key, item in value.items()}
+    if isinstance(value, np.ndarray):
+        return _json_trace_value(value.tolist())
+    if isinstance(value, (list, tuple)):
+        return [_json_trace_value(item) for item in value]
+    if isinstance(value, np.generic):
+        return _json_trace_value(value.item())
+    if value is None or type(value) in (str, bool, int):
+        return value
+    if isinstance(value, float):
+        return value if np.isfinite(value) else None
+    return str(value)
+
+
 class SequentialTracker:
     """Backend: refine(frame, mask, seed), recover(frame, mask, top_k=5).
 
@@ -436,10 +461,47 @@ class SequentialTracker:
     No stale pose is returned. A private candidate can seed recovery verification.
     """
     def __init__(self, backend, initial_pose=None, settings=ValidationSettings(), *,
-                 time_policy=LEGACY_POLICY, initial_frame_id=None, initial_timestamp_s=None):
+                 time_policy=LEGACY_POLICY, initial_frame_id=None, initial_timestamp_s=None,
+                 pose_ranker=None, candidate_sink=None, trace_context=None,
+                 appearance_timing_source=None):
         if not isinstance(time_policy, TimePolicy):
             raise ValueError('time_policy must be a TimePolicy')
+        if pose_ranker is not None and not callable(getattr(pose_ranker, 'rank', None)):
+            raise ValueError('pose_ranker must expose rank(context, candidates)')
+        if candidate_sink is not None and not callable(candidate_sink):
+            raise ValueError('candidate_sink must be callable or None')
+        if (appearance_timing_source is not None and
+                not callable(appearance_timing_source) and
+                not hasattr(appearance_timing_source,
+                            'ranker_appearance_summary_ms')):
+            raise ValueError(
+                'appearance_timing_source must be callable or expose '
+                'ranker_appearance_summary_ms')
+        if trace_context is None:
+            trace_context = {}
+        if not isinstance(trace_context, Mapping):
+            raise ValueError('trace_context must be an identity mapping')
+        allowed_trace_keys = {
+            'physical_object_id', 'object_id', 'dataset_id', 'sequence_id',
+            'scene_id', 'background_id', 'provenance_kind', 'background_kind',
+            'provenance',
+        }
+        detached_trace_context = {}
+        for name, value in trace_context.items():
+            if name not in allowed_trace_keys:
+                raise ValueError(f'unsupported trace_context field: {name}')
+            if value is not None and (type(value) not in (str, int, float, bool)):
+                raise ValueError(f'trace_context {name} must be a scalar identity value')
+            if isinstance(value, float) and not np.isfinite(value):
+                raise ValueError(f'trace_context {name} must be finite')
+            detached_trace_context[name] = value
         self.backend = backend; self.settings = settings; self.time_policy = time_policy
+        self.pose_ranker = pose_ranker
+        self.candidate_sink = candidate_sink
+        self.appearance_timing_source = appearance_timing_source
+        self.trace_context = MappingProxyType(detached_trace_context)
+        self._active_candidate_trace = None
+        self._appearance_summary_start_ms = None
         if time_policy.mode == LEGACY:
             if initial_frame_id is not None or initial_timestamp_s is not None:
                 raise ValueError('Legacy controlled seeds cannot specify frame/time keys')
@@ -478,6 +540,194 @@ class SequentialTracker:
         if (getattr(self.backend, 'time_policy', None) != self.time_policy or
                 PHYSICAL not in supported or not callable(getattr(self.backend, 'clear_motion', None))):
             raise ValueError('Physical backend must declare this policy, PHYSICAL support and clear_motion')
+
+    def _rank_context(self, recovery):
+        return {
+            'recovery': bool(recovery),
+            'recovery_ambiguity_ratio': self.settings.recovery_ambiguity_ratio,
+            'recovery_rotation_degrees': self.settings.recovery_rotation_degrees,
+            'recovery_translation_m': self.settings.recovery_translation_m,
+        }
+
+    @staticmethod
+    def _pose_trace(pose):
+        return None if pose is None else _json_trace_value(np.asarray(pose))
+
+    def _appearance_summary_clock_ms(self):
+        source = self.appearance_timing_source
+        if source is None:
+            return None
+        raw = (source() if callable(source) else
+               getattr(source, 'ranker_appearance_summary_ms'))
+        if isinstance(raw, bool):
+            raise ValueError('appearance summary clock must be finite nonnegative milliseconds')
+        try:
+            value = float(raw)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                'appearance summary clock must be finite nonnegative milliseconds') from exc
+        if not np.isfinite(value) or value < 0.:
+            raise ValueError(
+                'appearance summary clock must be finite nonnegative milliseconds')
+        return value
+
+    def _begin_candidate_trace(self, key, *, mask_state, recovery):
+        if self.candidate_sink is None:
+            return
+        self._appearance_summary_start_ms = self._appearance_summary_clock_ms()
+        self._active_candidate_trace = {
+            'trace_schema_version': 1,
+            'frame_id': int(key.frame_id),
+            'timestamp_s': key.timestamp_s,
+            'clock_mode': key.clock_mode,
+            'context': {
+                **dict(self.trace_context),
+                'recovery': bool(recovery),
+                'mask_state': mask_state,
+            },
+            'memory': {
+                'accepted_pose': self._pose_trace(self.accepted),
+                'pending_pose': self._pose_trace(self.pending),
+                'last_valid_pose': self._pose_trace(self.last_valid_pose),
+                'last_valid_frame_id': self.last_valid_id,
+                'last_valid_timestamp_s': self.last_valid_time_s,
+                'pending_frame_id': self.pending_id,
+                'pending_timestamp_s': self.pending_time_s,
+            },
+            'candidates': [],
+            'rank_decision': {
+                'ordered_ids': [], 'scores': {}, 'selected_id': None,
+                'rejection_reason': None,
+            },
+            'legacy_choice_candidate_id': None,
+            'timings_ms': {
+                'feature_extraction': 0.0,
+                'appearance_summary': 0.0,
+                'rank_decision': 0.0,
+            },
+        }
+
+    def _add_trace_timing(self, name, elapsed_ms):
+        trace = self._active_candidate_trace
+        if trace is None:
+            return
+        try:
+            elapsed_ms = float(elapsed_ms)
+        except (TypeError, ValueError, OverflowError):
+            return
+        if np.isfinite(elapsed_ms) and elapsed_ms >= 0:
+            timings = trace['timings_ms']
+            timings[name] = float(timings.get(name, 0.0) + elapsed_ms)
+
+    def _extract_ranker_features(self, stats, extra=None):
+        from .quality_ranker_features import extract_features
+        begin = time.perf_counter()
+        try:
+            return extract_features(stats, extra)
+        finally:
+            self._add_trace_timing(
+                'feature_extraction', (time.perf_counter() - begin) * 1000)
+
+    def _record_candidate(self, *, candidate_id, original_index, stage,
+                          candidate, stats, features, eligible, rejection,
+                          gates):
+        if self._active_candidate_trace is None:
+            return
+        score = None
+        if isinstance(stats, Mapping):
+            value = stats.get('score')
+            if value is not None:
+                try:
+                    numeric = float(value)
+                    score = numeric if np.isfinite(numeric) else None
+                except (TypeError, ValueError, OverflowError):
+                    pass
+        extra = None if candidate is None else getattr(candidate, 'ranker_features', None)
+        extra_trace = extra
+        appearance_summary_ms = None
+        if isinstance(extra, Mapping):
+            appearance_summary_ms = extra.get('appearance_summary_ms')
+            extra_trace = {key: value for key, value in extra.items()
+                           if key != 'appearance_summary_ms'}
+        try:
+            pose = None if candidate is None else _json_trace_value(
+                checked_pose(getattr(candidate, 'pose', None)))
+        except Exception:
+            # Invalid poses are still counted as failed candidate attempts, but
+            # malformed pose values must not poison the frame cache serializer.
+            pose = None
+        self._active_candidate_trace['candidates'].append({
+            'candidate_id': candidate_id,
+            'original_index': int(original_index),
+            'stage': stage,
+            'source': None if candidate is None else _json_trace_value(
+                getattr(candidate, 'source', None)),
+            'pose': pose,
+            'eligible': bool(eligible),
+            'rejection': rejection,
+            'gates': dict(gates),
+            'validation_stats': _json_trace_value(stats),
+            'features': list(features),
+            'ranker_features': _json_trace_value(extra_trace),
+            'appearance_summary_ms': _json_trace_value(appearance_summary_ms),
+            'legacy_score': score,
+        })
+
+    def _set_candidate_rank_decision(self, decision, *, legacy_choice=None):
+        if self._active_candidate_trace is None:
+            return
+        self._active_candidate_trace['rank_decision'] = decision.as_dict()
+        self._active_candidate_trace['legacy_choice_candidate_id'] = legacy_choice
+
+    def _record_legacy_rank(self, candidates, recovery):
+        from .quality_pose_ranker import LegacyPoseRanker
+        context = self._rank_context(recovery)
+        begin = time.perf_counter()
+        try:
+            decision = LegacyPoseRanker().rank(context, candidates)
+        finally:
+            self._add_trace_timing(
+                'rank_decision', (time.perf_counter() - begin) * 1000)
+        self._set_candidate_rank_decision(decision,
+                                          legacy_choice=decision.selected_id)
+        return decision
+
+    def _rank_candidates(self, candidates, recovery):
+        context = self._rank_context(recovery)
+        begin = time.perf_counter()
+        try:
+            decision = self.pose_ranker.rank(context, candidates)
+        finally:
+            self._add_trace_timing(
+                'rank_decision', (time.perf_counter() - begin) * 1000)
+        if self.candidate_sink is not None:
+            legacy = self._record_legacy_rank(candidates, recovery)
+            self._set_candidate_rank_decision(
+                decision, legacy_choice=legacy.selected_id)
+        return decision
+
+    def _finish_candidate_trace(self, result):
+        trace = self._active_candidate_trace
+        if trace is None:
+            return
+        public_timings = result.get('timings_ms', {})
+        if isinstance(public_timings, Mapping):
+            trace['timings_ms'].update(_json_trace_value(public_timings))
+        current_appearance_ms = self._appearance_summary_clock_ms()
+        if self._appearance_summary_start_ms is not None:
+            if current_appearance_ms is None:
+                raise ValueError('appearance summary timing source disappeared mid-frame')
+            delta = current_appearance_ms - self._appearance_summary_start_ms
+            trace['timings_ms']['appearance_summary'] += max(0.0, delta)
+        self._appearance_summary_start_ms = None
+        trace.update({
+            'pose_state': result.get('pose_state'),
+            'render_state': result.get('render_state'),
+            'failure_reason': result.get('failure_reason'),
+            'cameraFromObject': result.get('cameraFromObject'),
+        })
+        self._active_candidate_trace = None
+        self.candidate_sink(trace)
 
     def _preflight_key(self, key):
         if not isinstance(key, FrameKey) or key.clock_mode != self.time_policy.mode:
@@ -560,7 +810,11 @@ class SequentialTracker:
         if not isinstance(reason, str) or not reason:
             raise ValueError('Unavailable row requires a reason')
         self._preflight_key(key)
-        return self._advance_unavailable(key, reason)
+        self._begin_candidate_trace(key, mask_state='unavailable',
+                                    recovery=self.accepted is None)
+        result = self._advance_unavailable(key, reason)
+        self._finish_candidate_trace(result)
+        return result
 
     def update(self, frame, segmentation):
         if not isinstance(frame, Frame) or not isinstance(segmentation, MaskPrediction):
@@ -569,11 +823,15 @@ class SequentialTracker:
         self._preflight_key(key)
         if segmentation.key != key:
             raise ValueError('Mask/frame key mismatch')
+        self._begin_candidate_trace(key, mask_state=segmentation.state,
+                                    recovery=self.accepted is None)
         if self.terminal:
-            return self._terminal_result(key, segmentation.state,
-                                         timings=segmentation.timings_ms)
+            result = self._terminal_result(key, segmentation.state,
+                                           timings=segmentation.timings_ms)
+            self._finish_candidate_trace(result)
+            return result
         try:
-            return self._update_after_preflight(frame, segmentation)
+            result = self._update_after_preflight(frame, segmentation)
         except Exception:
             # A backend operation may fail after partially changing optical-flow
             # or model memory.  Physical chronology cannot safely resume from an
@@ -581,18 +839,27 @@ class SequentialTracker:
             # making another backend call.  Keep the old exception behavior for
             # authenticated legacy callers.
             if self.time_policy.mode != PHYSICAL:
+                failure = self._base_result(key, segmentation.state,
+                                            'candidate_evaluation_error',
+                                            segmentation.timings_ms)
+                self._finish_candidate_trace(failure)
                 raise
             self.terminal = True
-            return self._terminal_result(key, segmentation.state,
-                                         'motion_cleanup_unconfirmed',
-                                         segmentation.timings_ms)
+            result = self._terminal_result(key, segmentation.state,
+                                           'motion_cleanup_unconfirmed',
+                                           segmentation.timings_ms)
+        # Sink errors deliberately propagate outside the physical-runtime
+        # containment block. Missing training/audit output must not be hidden.
+        self._finish_candidate_trace(result)
+        return result
 
     def _update_after_preflight(self, frame, segmentation):
         key = frame.key
         usable = segmentation.usable(frame.rgb.shape[:2])
         if self.time_policy.mode == PHYSICAL and not usable:
-            return self._advance_unavailable(key, segmentation.reason or 'visible_mask_unavailable',
-                                             segmentation.state, segmentation.timings_ms)
+            return self._advance_unavailable(
+                key, segmentation.reason or 'visible_mask_unavailable',
+                segmentation.state, segmentation.timings_ms)
 
         expired = (self.time_policy.mode == PHYSICAL and (
             (self.last_valid_time_s is not None and
@@ -638,15 +905,33 @@ class SequentialTracker:
                 motion_seed = self.backend.motion_seed(motion_arg)
                 if motion_seed is not None: seed = motion_seed
             candidates = [self.backend.refine(frame, segmentation.mask, seed)]
-        evaluated = self._evaluate(candidates, frame, segmentation.mask)
+        evaluated = self._evaluate(candidates, frame, segmentation.mask,
+                                   stage='refinement')
+        rank_decision = None
+        if self.pose_ranker is not None and evaluated:
+            rank_decision = self._rank_candidates(evaluated, recovery)
         if not evaluated:
             recovery = True; self.accepted = None
+            if self._active_candidate_trace is not None:
+                self._active_candidate_trace['context']['recovery'] = True
             begin = time.perf_counter()
             hypotheses = self.backend.recover(frame, segmentation.mask, top_k=5)
             timings['recovery'] = (time.perf_counter()-begin)*1000
             candidates = [self.backend.refine(frame, segmentation.mask, p) for p in hypotheses[:5]]
-            evaluated = self._evaluate(candidates, frame, segmentation.mask)
+            evaluated = self._evaluate(candidates, frame, segmentation.mask,
+                                       stage='recovery')
+            if self.pose_ranker is not None:
+                rank_decision = self._rank_candidates(evaluated, recovery)
+            elif self.candidate_sink is not None:
+                self._record_legacy_rank(evaluated, recovery)
+        elif self.pose_ranker is None and self.candidate_sink is not None:
+            self._record_legacy_rank(evaluated, recovery)
         timings['pose_total'] = (time.perf_counter()-start)*1000
+        if self.pose_ranker is not None or self.candidate_sink is not None:
+            # Ranker/tracing are explicit opt-ins. Their timing includes any
+            # feature extraction, appearance-summary synchronization, and rank
+            # call, while the default legacy result retains its exact shape.
+            result['timings_ms'].update(timings)
         result['rejection_reasons'] = self.rejections.copy()
         if not evaluated:
             self.pending = None
@@ -657,14 +942,47 @@ class SequentialTracker:
             if 'contradicts_rendered_texture' in self.rejections:
                 result['failure_reason'] = 'contradicts_rendered_texture'
             return result
-        evaluated.sort(key=lambda v: v[1]['score'], reverse=True)
-        pose, stats = evaluated[0]; result['validation'] = stats
-        if recovery and any(s['score'] >= stats['score']*self.settings.recovery_ambiguity_ratio and
-                            distinct_pose(pose, other, self.settings) for other, s in evaluated[1:]):
-            self.pending = None
-            self.pending_id = None; self.pending_time_s = None
-            result['failure_reason'] = 'ambiguous_recovery_hypotheses'
-            return result
+        if self.pose_ranker is not None:
+            selected = next((row for row in evaluated
+                             if row.candidate_id == rank_decision.selected_id), None)
+            if selected is None:
+                ordered_top = next((row for row in evaluated
+                                    if rank_decision.ordered_ids and
+                                    row.candidate_id == rank_decision.ordered_ids[0]), None)
+                if ordered_top is not None:
+                    result['validation'] = ordered_top.stats
+                self.accepted = None
+                self.pending = None
+                self.pending_id = None; self.pending_time_s = None
+                result['failure_reason'] = (rank_decision.rejection_reason or
+                                            'ranker_rejected_current_image_candidates')
+                return result
+            pose, stats = selected.pose, selected.stats
+            result['validation'] = stats
+        elif self.candidate_sink is not None:
+            # Tracing with the default ranker follows the historical stable
+            # score sort and ratio check byte-for-byte in its selection rule.
+            evaluated.sort(key=lambda row: row.stats['score'], reverse=True)
+            pose, stats = evaluated[0].pose, evaluated[0].stats
+            result['validation'] = stats
+            if recovery and any(
+                    row.stats['score'] >= stats['score'] *
+                    self.settings.recovery_ambiguity_ratio and
+                    distinct_pose(pose, row.pose, self.settings)
+                    for row in evaluated[1:]):
+                self.pending = None
+                self.pending_id = None; self.pending_time_s = None
+                result['failure_reason'] = 'ambiguous_recovery_hypotheses'
+                return result
+        else:
+            evaluated.sort(key=lambda v: v[1]['score'], reverse=True)
+            pose, stats = evaluated[0]; result['validation'] = stats
+            if recovery and any(s['score'] >= stats['score']*self.settings.recovery_ambiguity_ratio and
+                                distinct_pose(pose, other, self.settings) for other, s in evaluated[1:]):
+                self.pending = None
+                self.pending_id = None; self.pending_time_s = None
+                result['failure_reason'] = 'ambiguous_recovery_hypotheses'
+                return result
         if recovery and (self.pending is None or distinct_pose(pose, self.pending, self.settings)):
             self.pending = pose
             self.pending_id = frame.frame_id
@@ -683,21 +1001,87 @@ class SequentialTracker:
         result.update(cameraFromObject=pose.tolist(), pose_state='tracking', render_state='visible', failure_reason=None)
         return result
 
-    def _evaluate(self, candidates, frame, mask):
+    def _evaluate(self, candidates, frame, mask, *, stage='refinement'):
+        rank_data = self.pose_ranker is not None or self.candidate_sink is not None
+        if rank_data:
+            from .quality_pose_ranker import RankCandidate, candidate_content_ids
+            candidates = list(candidates)
+            candidate_ids = candidate_content_ids(candidates, stage=stage)
+        else:
+            candidates = list(candidates)
+            candidate_ids = ()
         good = []
-        for c in candidates:
-            if c is None: continue
-            ok, reason, stats = validate(c, frame, mask, self.settings)
+        for original_index, candidate in enumerate(candidates):
+            candidate_id = candidate_ids[original_index] if rank_data else None
+            extra = (getattr(candidate, 'ranker_features', None)
+                     if candidate is not None else None)
+            gates = {
+                'current_image_validation': False,
+                'backend_motion': True,
+                'causal_motion': True,
+            }
+            if candidate is None:
+                if rank_data:
+                    features = self._extract_ranker_features({}, extra)
+                    self._record_candidate(
+                        candidate_id=candidate_id, original_index=original_index,
+                        stage=stage, candidate=None, stats={}, features=features,
+                        eligible=False, rejection='no_candidate_returned', gates=gates)
+                continue
+            try:
+                ok, reason, stats = validate(
+                    candidate, frame, mask, self.settings,
+                    include_ranker_stats=rank_data)
+            except Exception:
+                if rank_data:
+                    features = self._extract_ranker_features({}, extra)
+                    try:
+                        checked_pose(candidate.pose)
+                        rejection = 'candidate_validation_error'
+                    except Exception:
+                        rejection = 'invalid_pose'
+                    self._record_candidate(
+                        candidate_id=candidate_id, original_index=original_index,
+                        stage=stage, candidate=candidate, stats={}, features=features,
+                        eligible=False, rejection=rejection, gates=gates)
+                raise
+            gates['current_image_validation'] = bool(ok)
             if not ok:
                 self.rejections.append(reason)
+                if rank_data:
+                    features = self._extract_ranker_features(stats, extra)
+                    self._record_candidate(
+                        candidate_id=candidate_id, original_index=original_index,
+                        stage=stage, candidate=candidate, stats=stats, features=features,
+                        eligible=False, rejection=reason, gates=gates)
                 continue
-            pose = checked_pose(c.pose)
+            pose = checked_pose(candidate.pose)
             if hasattr(self.backend, 'validate_motion'):
                 motion_arg = frame if self.time_policy.mode == PHYSICAL else frame.frame_id
-                motion_ok, motion_reason, motion_stats = self.backend.validate_motion(c, motion_arg)
+                try:
+                    motion_ok, motion_reason, motion_stats = self.backend.validate_motion(
+                        candidate, motion_arg)
+                except Exception:
+                    if rank_data:
+                        features = self._extract_ranker_features(stats, extra)
+                        self._record_candidate(
+                            candidate_id=candidate_id, original_index=original_index,
+                            stage=stage, candidate=candidate, stats=stats,
+                            features=features, eligible=False,
+                            rejection='backend_motion_validation_error',
+                            gates=gates)
+                    raise
                 stats['model_motion'] = motion_stats
+                gates['backend_motion'] = bool(motion_ok)
                 if not motion_ok:
                     self.rejections.append(motion_reason)
+                    if rank_data:
+                        features = self._extract_ranker_features(stats, extra)
+                        self._record_candidate(
+                            candidate_id=candidate_id, original_index=original_index,
+                            stage=stage, candidate=candidate, stats=stats,
+                            features=features, eligible=False,
+                            rejection=motion_reason, gates=gates)
                     continue
             if self.last_valid_id is not None:
                 if self.time_policy.mode == PHYSICAL:
@@ -733,7 +1117,34 @@ class SequentialTracker:
                         angle_ok = angle <= max_angle
                         distance_ok = distance <= max_distance
                     if not angle_ok or not distance_ok:
+                        gates['causal_motion'] = False
                         self.rejections.append('implausible_pose_jump')
+                        if rank_data:
+                            features = self._extract_ranker_features(stats, extra)
+                            self._record_candidate(
+                                candidate_id=candidate_id,
+                                original_index=original_index, stage=stage,
+                                candidate=candidate, stats=stats, features=features,
+                                eligible=False,
+                                rejection='implausible_pose_jump', gates=gates)
                         continue
-            good.append((pose, stats))
+            if rank_data:
+                features = self._extract_ranker_features(stats, extra)
+                public_stats = {key: value for key, value in stats.items()
+                                if key not in ('inlier_ratio',
+                                               'mean_inlier_confidence')}
+                good.append(RankCandidate(
+                    candidate_id=candidate_id,
+                    original_index=original_index,
+                    candidate=candidate,
+                    stats=public_stats,
+                    features=features,
+                    ranker_features=(extra if isinstance(extra, Mapping) else None),
+                ))
+                self._record_candidate(
+                    candidate_id=candidate_id, original_index=original_index,
+                    stage=stage, candidate=candidate, stats=stats, features=features,
+                    eligible=True, rejection=None, gates=gates)
+            else:
+                good.append((pose, stats))
         return good

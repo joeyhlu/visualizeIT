@@ -1,0 +1,19 @@
+{
+  "seed": 42,
+  "epochs": 1,
+  "batch_size": 1,
+  "learning_rate": 0.00001,
+  "weight_decay": 0.0001,
+  "visibility_weight": 1.0,
+  "patience": 3,
+  "min_delta_px": 0.001,
+  "gradient_clip": 1.0,
+  "checkpoint_every_steps": 8,
+  "max_steps": 16,
+  "max_seconds": 1200.0,
+  "max_total_seconds": 1800.0,
+  "max_checkpoint_bytes": 335544320,
+  "max_output_bytes": 1048576000,
+  "device": "cpu",
+  "amp": false
+}

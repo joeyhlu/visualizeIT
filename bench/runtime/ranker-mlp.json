@@ -1,0 +1,16 @@
+{
+  "architecture": "mlp64_32",
+  "seed": 42,
+  "epochs": 40,
+  "batch_size": 8,
+  "accumulation": 4,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "pairwise_weight": 0.5,
+  "patience": 6,
+  "max_seconds": 900,
+  "max_output_bytes": 67108864,
+  "max_checkpoint_bytes": 16777216,
+  "device": "cuda",
+  "amp": true
+}

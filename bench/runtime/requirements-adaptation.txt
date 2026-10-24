@@ -1,0 +1,3 @@
+# Cloud-only compatibility baseline. No package is installed by the launcher.
+# DPT head reuses the existing frozen runtime; SAM extras remain optional.
+-r requirements-ranker.txt

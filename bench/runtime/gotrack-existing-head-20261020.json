@@ -1,0 +1,18 @@
+{
+  "schema": "gotrack_cached_head_artifact_v1",
+  "artifact_id": "existing-cached-pilot-20261020-285-updates",
+  "export_sha256": "520ba2ebe2357098d878dea6ba60e7b74fc9e96ce2010d21c2d73592d5004cd1",
+  "export_bytes": 80148566,
+  "reference_checkpoint_sha256": "4682c7c571e45a5a6f89ccfb4a5986a61584d7ecb8a7183721d5a3d02348795a",
+  "reference_checkpoint_bytes": 231015622,
+  "training_lock_sha256": "44e4c8a84d602a6fbe623622a3488db014aaddf562b06748e3a13afc88693d33",
+  "base_checkpoint_sha256": "f7d127abe2b8e37b1322a19115343286a6560700c6e02fc6080b4e2426a01086",
+  "dataset_sha256": "66af85861ea84de57ca60460def7021612681f0a5199c41ce96d41424e9e97af",
+  "training_config_sha256": "666b5bb627d4c43473e8c911f57ee8033d9f74f6a62185d6bc7c5bd627c1b4b3",
+  "upstream_revision": "68f76055755f2a4a8967e13ece834f975f008bdf",
+  "installer_sha256": "d1cd703ffe389ea72947d86a37ddbd42a065323af35c9e73547362027d3486b3",
+  "export_schema": "correspondence_head_export_v1",
+  "export_deployment": "explicit_cloud_research_only_pose_head_replacement",
+  "head_interface": "DPTHead-defaults/decoder-feature-map/280x280/reference-to-query-pixels/confidence-mask",
+  "quality_claim": false
+}

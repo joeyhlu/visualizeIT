@@ -1,0 +1,18 @@
+{
+  "schema": "gotrack_cached_head_artifact_v1",
+  "artifact_id": "flow-terminal-20261021-final285",
+  "export_sha256": "27e06a513713232f4ae542d50b8364a3bb319669451448e694bcd335a3fb9311",
+  "export_bytes": 80165526,
+  "reference_checkpoint_sha256": "0c211531ffdee325e6504411f9dee07c83cc242cd8d048c115548aed6de2fa3b",
+  "reference_checkpoint_bytes": 80203390,
+  "training_lock_sha256": "44e4c8a84d602a6fbe623622a3488db014aaddf562b06748e3a13afc88693d33",
+  "base_checkpoint_sha256": "f7d127abe2b8e37b1322a19115343286a6560700c6e02fc6080b4e2426a01086",
+  "dataset_sha256": "66af85861ea84de57ca60460def7021612681f0a5199c41ce96d41424e9e97af",
+  "training_config_sha256": "d11504b85172c4c404debc7defa948243520fbbfabf7b995f0031d2184c5269f",
+  "upstream_revision": "68f76055755f2a4a8967e13ece834f975f008bdf",
+  "installer_sha256": "d1cd703ffe389ea72947d86a37ddbd42a065323af35c9e73547362027d3486b3",
+  "export_schema": "correspondence_head_export_v1",
+  "export_deployment": "explicit_cloud_research_only_pose_head_replacement",
+  "head_interface": "DPTHead-defaults/decoder-feature-map/280x280/reference-to-query-pixels/confidence-mask",
+  "quality_claim": false
+}

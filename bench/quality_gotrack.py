@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import sys
 import random
+import time
 from dataclasses import dataclass
 from collections.abc import Mapping
 from types import MappingProxyType
@@ -25,6 +26,7 @@ _LEGACY_COORDINATE_MODE = 'legacy'
 _CAPTURE_COORDINATE_MODE = 'integer_centers_v1'
 _LEGACY_RENDER_POLICY = 'legacy_v1'
 _CAPTURE_RENDER_POLICY = 'capture_zero_sample_v1'
+_GOTRACK_INTEGER_INFERENCE_PROFILE = 'gotrack_integer_legacy_synthetic_v1'
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +153,80 @@ def _capture_native_uv(points, crop_k, rotation, native_k):
         output[selected, 0] = native_h[front, 0] / z[front]
         output[selected, 1] = native_h[front, 1] / z[front]
     return output
+
+
+def _integer_profile_correspondences(depth, crop_k, crop_from_orig, pose_mm,
+                                     flow, weight, rendered_mask, observed_mask,
+                                     native_k):
+    """Build aligned integer-grid PnP records while preserving source crop tensors."""
+    from .quality_capture import integer_depth_points
+
+    def crop_map(value, name, *, dtype=None):
+        array = _capture_numpy(value)
+        while array.ndim > 2 and array.shape[0] == 1:
+            array = array[0]
+        if array.shape != (280, 280):
+            raise ValueError(f'{name} must be a 280x280 single-channel crop')
+        if dtype is not None:
+            array = array.astype(dtype, copy=False)
+        return array
+
+    depth_value = _capture_numpy(depth)
+    while depth_value.ndim > 2 and depth_value.shape[0] == 1:
+        depth_value = depth_value[0]
+    if depth_value.dtype.kind not in 'iuf' or depth_value.dtype.kind == 'b':
+        raise ValueError('Rendered depth must be a real numeric millimetre map')
+    depth_map = crop_map(depth_value, 'Rendered depth', dtype=np.float64)
+    flow_value = _capture_numpy(flow)
+    if flow_value.dtype.kind not in 'iuf' or flow_value.dtype.kind == 'b':
+        raise ValueError('Predicted flow must be real numeric crop pixels')
+    flow_map = flow_value.astype(np.float64, copy=False)
+    if flow_map.shape != (280, 280, 2):
+        raise ValueError('Predicted flow must be a 280x280x2 crop map')
+    weight_value = _capture_numpy(weight)
+    if weight_value.dtype.kind not in 'iuf' or weight_value.dtype.kind == 'b':
+        raise ValueError('Predicted confidence must be real numeric weights')
+    confidence = crop_map(weight_value, 'Predicted confidence', dtype=np.float64)
+    rendered = crop_map(rendered_mask, 'Rendered template mask') > .5
+    observed = crop_map(observed_mask, 'Observed crop mask', dtype=np.float64)
+
+    camera = _capture_numpy(crop_k).astype(np.float64, copy=False)
+    if (camera.shape != (3, 3) or not np.isfinite(camera).all() or
+            camera[0, 0] <= 0. or camera[1, 1] <= 0. or
+            not np.allclose(camera[2], [0., 0., 1.], rtol=0., atol=1e-8) or
+            abs(float(np.linalg.det(camera))) <= 1e-12):
+        raise ValueError('Ordinary crop camera K must be finite, nonsingular and have positive focal lengths')
+    transform = _capture_transform(crop_from_orig)
+    native = _capture_numpy(native_k).astype(np.float64, copy=False)
+    if (native.shape != (3, 3) or not np.isfinite(native).all() or
+            native[0, 0] <= 0. or native[1, 1] <= 0. or
+            not np.allclose(native[0, 1], 0., rtol=0., atol=1e-12) or
+            not np.allclose(native[2], [0., 0., 1.], rtol=0., atol=1e-12)):
+        raise ValueError('Effective native camera K must be finite, zero-skew and calibrated')
+
+    integer_pixels, crop_xyz_mm = integer_depth_points(depth_map, camera)
+    crop_pose = transform @ _capture_numpy(pose_mm).astype(np.float64, copy=False)
+    object_xyz_mm = (crop_xyz_mm - crop_pose[:3, 3]) @ crop_pose[:3, :3]
+    target = integer_pixels.astype(np.float64) + flow_map
+    finite_target = np.isfinite(target).all(axis=2)
+    in_bounds = (finite_target & (target[..., 0] >= 0.) & (target[..., 0] < 280.) &
+                 (target[..., 1] >= 0.) & (target[..., 1] < 280.))
+    # Invalid/unbounded coordinates never reach floor or integer indexing.
+    safe_target = np.zeros_like(target)
+    safe_target[in_bounds] = target[in_bounds]
+    target_x = np.floor(safe_target[..., 0]).astype(np.int64)
+    target_y = np.floor(safe_target[..., 1]).astype(np.int64)
+    valid = rendered & np.isfinite(depth_map) & (depth_map > 0.)
+    valid &= np.isfinite(crop_xyz_mm).all(axis=2) & np.isfinite(object_xyz_mm).all(axis=2)
+    valid &= np.isfinite(flow_map).all(axis=2) & np.isfinite(confidence) & (confidence > .3)
+    valid &= in_bounds & (observed > .5)
+    valid &= observed[target_y, target_x] > .5
+
+    native_uv = _capture_native_uv(target.reshape((-1, 2)), camera,
+                                   transform[:3, :3], native).reshape((280, 280, 2))
+    valid &= np.isfinite(native_uv).all(axis=2)
+    return (crop_pose, object_xyz_mm, target, native_uv, confidence, valid,
+            integer_pixels, crop_xyz_mm)
 
 
 def _capture_supported(valid, uv, helper):
@@ -296,11 +372,11 @@ class TexturedRenderer:
 
     @property
     def render_policy(self):
-        return self._render_policy
+        return getattr(self, '_render_policy', _LEGACY_RENDER_POLICY)
 
     @property
     def render_policy_metadata(self):
-        if (self._render_policy != _CAPTURE_RENDER_POLICY or
+        if (self.render_policy != _CAPTURE_RENDER_POLICY or
                 self.coordinate_mode != _CAPTURE_COORDINATE_MODE or
                 type(self.disable_multisampling) is not bool or
                 self.disable_multisampling is not False or
@@ -350,7 +426,7 @@ class TexturedRenderer:
         self._capture_dimensions = None
 
     def render_object_model(self, obj_id, camera_model_c2w, render_types=None, return_tensors=False, background=None, **kwargs):
-        capture = self._render_policy == _CAPTURE_RENDER_POLICY
+        capture = self.render_policy == _CAPTURE_RENDER_POLICY
         if capture:
             self._validate_capture_render_configuration()
         from .quality_render_stability import _render_lock
@@ -367,7 +443,7 @@ class TexturedRenderer:
                                     return_tensors=False, background=None, **kwargs):
         from utils.renderer_base import RenderType
         if obj_id != self.obj_id: raise ValueError('Wrong object asset')
-        if self._render_policy == _CAPTURE_RENDER_POLICY:
+        if self.render_policy == _CAPTURE_RENDER_POLICY:
             return self._render_capture_locked(obj_id, camera_model_c2w, RenderType,
                                                return_tensors=return_tensors)
         p = self.pyrender; camera = camera_model_c2w
@@ -652,7 +728,7 @@ class TexturedRenderer:
     def close(self):
         from .quality_render_stability import _render_lock
         with _render_lock:
-            if self._render_policy == _CAPTURE_RENDER_POLICY:
+            if self.render_policy == _CAPTURE_RENDER_POLICY:
                 offscreen = self.offscreen
                 previously_verified = self._capture_verified_offscreen
                 self.offscreen = None
@@ -676,21 +752,152 @@ class TexturedRenderer:
 
 class GoTrackRefiner:
     def __init__(self, network, renderer, obj_id, device, pnp_use_extrinsic_guess=True,
-                 diagnostic_capture_callback=None, chronological_capture_callback=None):
+                 diagnostic_capture_callback=None, chronological_capture_callback=None,
+                 *, inference_geometry='legacy', inference_observer_capability=None):
         if type(pnp_use_extrinsic_guess) is not bool:
             raise TypeError('pnp_use_extrinsic_guess must be a bool')
         if diagnostic_capture_callback is not None and not callable(diagnostic_capture_callback):
             raise TypeError('diagnostic_capture_callback must be callable or None')
         if chronological_capture_callback is not None and not callable(chronological_capture_callback):
             raise TypeError('chronological_capture_callback must be callable or None')
+        if inference_geometry not in ('legacy', _GOTRACK_INTEGER_INFERENCE_PROFILE):
+            raise ValueError('Unknown GoTrack inference geometry')
+        if inference_observer_capability is not None:
+            from .quality_gotrack_probe import InferenceObserverCapability
+            from .quality_adaptation_refinement_states import RefStateObserverCapability
+            from .quality_adaptation_larger import LargerObserverCapability
+            if type(inference_observer_capability) not in (InferenceObserverCapability, RefStateObserverCapability, LargerObserverCapability):
+                raise ValueError('Expected an authenticated inference observer capability')
+            inference_observer_capability.validate(chronological_capture_callback, inference_geometry)
+        if inference_geometry == _GOTRACK_INTEGER_INFERENCE_PROFILE:
+            if diagnostic_capture_callback is not None or (chronological_capture_callback is not None
+                    and inference_observer_capability is None):
+                raise ValueError('The adapted inference profile requires an authenticated observer capability')
         self.network = network; self.renderer = renderer; self.obj_id = obj_id; self.device = device
+        self.inference_geometry = inference_geometry
         self.pnp_use_extrinsic_guess = pnp_use_extrinsic_guess
         self.diagnostic_capture_callback = diagnostic_capture_callback
         self.chronological_capture_callback = chronological_capture_callback
         self._chronological_capture_context = None
+        self._inference_observer_capability = inference_observer_capability
+        self._constructed_inference_geometry = inference_geometry
+        # Set only by the ranker pipeline. When false, the production forward
+        # path is unchanged and no backbone hook is registered.
+        self.collect_ranker_features = False
+        self._ranker_appearance_summary_ms = 0.0
+
+    @property
+    def ranker_appearance_summary_ms(self):
+        """Cumulative CPU-side patch-summary time for one tracker trace source."""
+        return self._ranker_appearance_summary_ms
 
     def set_chronological_capture_context(self, context):
         self._chronological_capture_context = None if context is None else dict(context)
+
+    def _ranker_forward(self, query, template, mask, observed_mask, rendered_mask):
+        if not self.collect_ranker_features:
+            return self.network(query, template, mask), None
+        backbone = getattr(self.network, 'backbone', None)
+        register_hook = getattr(backbone, 'register_forward_hook', None)
+        if not callable(register_hook):
+            return self.network(query, template, mask), None
+        captured = {}
+
+        def capture_backbone(_module, _inputs, output):
+            if isinstance(output, Mapping):
+                captured['feature_maps'] = output.get('feature_maps')
+
+        handle = register_hook(capture_backbone)
+        try:
+            result = self.network(query, template, mask)
+        finally:
+            handle.remove()
+        summary_begin = time.perf_counter()
+        try:
+            summary = self._summarize_ranker_features(
+                captured.get('feature_maps'), observed_mask, rendered_mask)
+        finally:
+            summary_ms = (time.perf_counter() - summary_begin) * 1000
+            self._ranker_appearance_summary_ms += summary_ms
+        summary = dict(summary)
+        summary['appearance_summary_ms'] = summary_ms
+        return result, summary
+
+    @staticmethod
+    def _ranker_mask_grid(mask, shape):
+        if mask is None:
+            return None
+        try:
+            array = np.asarray(_capture_numpy(mask))
+        except Exception:
+            return None
+        while array.ndim > 2 and array.shape[0] == 1:
+            array = array[0]
+        if array.ndim != 2:
+            return None
+        height, width = shape
+        if array.shape != shape:
+            resized = cv2.resize(array.astype(np.float32), (width, height),
+                                 interpolation=cv2.INTER_AREA)
+        else:
+            resized = array
+        return np.isfinite(resized) & (resized > .5)
+
+    @classmethod
+    def _summarize_ranker_features(cls, feature_maps, observed_mask, rendered_mask):
+        """Compare query/template backbone patches on a masked 2x2 crop grid.
+
+        These correspondingly positioned frozen features are a ranking signal,
+        not proof of object orientation or identity.
+        """
+        empty = {
+            'appearance_patch_cosine_00': None,
+            'appearance_patch_cosine_01': None,
+            'appearance_patch_cosine_10': None,
+            'appearance_patch_cosine_11': None,
+            'appearance_valid_fraction': None,
+        }
+        if feature_maps is None:
+            return empty
+        try:
+            features = np.asarray(_capture_numpy(feature_maps), dtype=np.float32)
+        except Exception:
+            return empty
+        if (features.ndim != 4 or features.shape[0] != 2 or
+                features.shape[1] < 1 or features.shape[2] < 2 or
+                features.shape[3] < 2 or not np.isfinite(features).all()):
+            return empty
+        query_grid, template_grid = features[0], features[1]
+        spatial_shape = features.shape[2:]
+        query_valid = cls._ranker_mask_grid(observed_mask, spatial_shape)
+        template_valid = cls._ranker_mask_grid(rendered_mask, spatial_shape)
+        if query_valid is None or template_valid is None:
+            return empty
+        query_norm = np.linalg.norm(query_grid, axis=0)
+        template_norm = np.linalg.norm(template_grid, axis=0)
+        valid = (query_valid & template_valid & np.isfinite(query_norm) &
+                 np.isfinite(template_norm) & (query_norm > 1e-12) &
+                 (template_norm > 1e-12))
+        valid_count = int(np.count_nonzero(valid))
+        if not valid_count:
+            return empty
+        cosine = np.sum(query_grid * template_grid, axis=0) / np.maximum(
+            query_norm * template_norm, 1e-12)
+        cosine = np.clip(cosine, -1., 1.)
+        height, width = spatial_shape
+        y_edges = np.linspace(0, height, 3, dtype=int)
+        x_edges = np.linspace(0, width, 3, dtype=int)
+        summary = dict(empty)
+        for row in range(2):
+            for column in range(2):
+                ys = slice(y_edges[row], y_edges[row + 1])
+                xs = slice(x_edges[column], x_edges[column + 1])
+                cell_valid = valid[ys, xs]
+                if np.any(cell_valid):
+                    name = f'appearance_patch_cosine_{row}{column}'
+                    summary[name] = float(np.mean(cosine[ys, xs][cell_valid]))
+        summary['appearance_valid_fraction'] = float(valid_count / valid.size)
+        return summary
 
     @staticmethod
     def _clone_capture_metadata(value):
@@ -747,8 +954,9 @@ class GoTrackRefiner:
         torch_rng_state = None
         cuda_rng_states = None
         try:
-            import torch as torch_module
-            torch = torch_module
+            torch = sys.modules.get('torch')
+            if torch is None:
+                raise LookupError('Torch has not been loaded by inference')
             torch_rng_state = torch.get_rng_state()
             if torch.cuda.is_initialized():
                 cuda_rng_states = torch.cuda.get_rng_state_all()
@@ -886,6 +1094,7 @@ class GoTrackRefiner:
         native_valid_halo = _capture_erode3(sampling_valid)
         native_foreground_halo = _capture_erode3(native_foreground)
         final = None
+        ranker_features = None
         model_iteration_rows = []
         with torch.inference_mode():
             for iteration in range(5):
@@ -983,9 +1192,10 @@ class GoTrackRefiner:
                     crop_mask_tensor = crop_mask_tensor.to(old_crop_mask.device)
                 data['crop_masks'] = crop_mask_tensor
 
-                flow_tensor, weight_tensor = self.network(
+                network_result, ranker_features = self._ranker_forward(
                     data['crop_rgbs'].to(self.device), template.rgbs.to(self.device),
-                    template.masks.to(self.device))
+                    template.masks.to(self.device), data['crop_masks'], template.masks)
+                flow_tensor, weight_tensor = network_result
                 flow = _capture_numpy(flow_tensor[0].permute(1, 2, 0)).astype(np.float64, copy=False)
                 native_weight = _capture_numpy(weight_tensor[0])
                 if flow.shape != (280, 280, 2) or native_weight.shape != (280, 280):
@@ -1217,7 +1427,8 @@ class GoTrackRefiner:
                 pose = native_pose
                 candidate = PoseCandidate(
                     pose_units(pose, .001), obj_points * .001,
-                    candidate_uv, retained_weights, source='refinement')
+                    candidate_uv, retained_weights, source='refinement',
+                    ranker_features=ranker_features)
                 final = candidate
                 if not capture_mode:
                     model_iteration_rows[-1]['solver_success'] = True
@@ -1258,7 +1469,26 @@ class GoTrackRefiner:
                                           frame.case_id, frame.ordinal)
 
     def refine(self, frame, mask, seed):
+        if self.inference_geometry != self._constructed_inference_geometry:
+            raise ValueError('Inference geometry cannot be changed after construction')
+        if self.inference_geometry == _GOTRACK_INTEGER_INFERENCE_PROFILE:
+            if self.diagnostic_capture_callback is not None:
+                raise ValueError('Integer inference does not admit legacy diagnostic observers')
+            if self.chronological_capture_callback is not None:
+                if self._inference_observer_capability is None:
+                    raise ValueError('Integer inference observer capability is missing')
+                self._inference_observer_capability.validate(
+                    self.chronological_capture_callback, self.inference_geometry)
         capture_binding = check_capture_frame(frame)
+        integer_profile = self.inference_geometry == _GOTRACK_INTEGER_INFERENCE_PROFILE
+        if integer_profile:
+            if capture_binding is not None:
+                raise ValueError('The adapted integer profile does not support capture Frames')
+            if (getattr(self.renderer, 'render_policy', None) != _LEGACY_RENDER_POLICY or
+                    getattr(self.renderer, 'coordinate_mode', None) != _CAPTURE_COORDINATE_MODE or
+                    getattr(self.renderer, 'unlit', None) is not True or
+                    getattr(self.renderer, 'disable_multisampling', None) is not True):
+                raise ValueError('Adapted inference requires legacy_v1 rendering, integer centers, unlit templates and no multisampling')
         if capture_binding is not None:
             if getattr(self.renderer, 'render_policy', None) != _CAPTURE_RENDER_POLICY:
                 raise ValueError('Capture refinement requires capture_zero_sample_v1 renderer policy')
@@ -1275,6 +1505,7 @@ class GoTrackRefiner:
         image = torch.from_numpy(frame.rgb.copy()).permute(2, 0, 1).float()[None]/255
         input_mask = torch.from_numpy((mask > 0).copy()).float()[None]
         final = None
+        ranker_features = None
         with torch.inference_mode():
             for iteration in range(5):
                 # Always rerender the fixed model, not previously inferred points.
@@ -1284,30 +1515,47 @@ class GoTrackRefiner:
                     crop_size=(280, 280), crop_rel_pad=.1, cropping_type='perspective_2d_box', ssaa_factor=1.,
                     background_type='gray', input_masks=input_mask)
                 template = data['templates']; crop_k = misc.get_intrinsic_matrix(cameras[0])
-                flow, weight = self.network(data['crop_rgbs'].to(self.device), template.rgbs.to(self.device), template.masks.to(self.device))
+                network_result, ranker_features = self._ranker_forward(
+                    data['crop_rgbs'].to(self.device), template.rgbs.to(self.device),
+                    template.masks.to(self.device), data.get('crop_masks'), template.masks)
+                flow, weight = network_result
                 flow = flow[0].permute(1, 2, 0).cpu().numpy(); weight = weight[0].cpu().numpy()
                 trace(f'refine/{frame.frame_id}/{iteration}', seed=pose, image=frame.rgb,
                       query=data['crop_rgbs'], template=template.rgbs, depth=template.depths,
                       flow=flow, weight=weight)
                 self._emit_chronological_capture('trace', dict(frame_id=int(frame.frame_id),
                     iteration=int(iteration), expected_stage=f'refine/{frame.frame_id}/{iteration}'))
-                # Upstream uses pixel centers (x+.5,y+.5) for rendered depth.
-                pixels, xyz_cam = transform3d.get_3d_points_from_depth(template.depths, torch.from_numpy(crop_k.astype(np.float32))[None])
-                source_pixel_centers = pixels[0].numpy()
-                target = source_pixel_centers+flow
-                crop_pose = crop_from_orig[0].numpy()@pose
-                xyz = (xyz_cam[0].numpy()-crop_pose[:3, 3])@crop_pose[:3, :3]
-                xx, yy = np.floor(target[..., 0]).astype(int), np.floor(target[..., 1]).astype(int)
-                valid = template.masks[0].numpy() & np.isfinite(target).all(2) & (weight > .3)
-                valid &= (xx >= 0) & (xx < 280) & (yy >= 0) & (yy < 280)
-                crop_mask = data['crop_masks'][0].numpy()
-                # The prior render can include surface behind a hand. Require
-                # current visible foreground at the source projection too;
-                # otherwise an occluded source can falsely match another part
-                # of the object and still land inside the destination mask.
-                valid &= crop_mask > .5
-                valid &= crop_mask[np.clip(yy, 0, 279), np.clip(xx, 0, 279)] > .5
-                obj_points = xyz[valid].astype(np.float64); target_points = target[valid].astype(np.float64)
+                if integer_profile:
+                    (crop_pose, xyz, target, native_uv, confidence, valid,
+                     integer_pixels, xyz_cam) = _integer_profile_correspondences(
+                        template.depths, crop_k, crop_from_orig[0], pose, flow, weight,
+                        template.masks[0], data['crop_masks'][0], k)
+                    source_pixel_centers = integer_pixels
+                    crop_mask = _capture_numpy(data['crop_masks'][0])
+                    obj_points = xyz[valid].astype(np.float64)
+                    target_points = target[valid].astype(np.float64)
+                    candidate_pixels = native_uv[valid].astype(np.float64)
+                    candidate_weights = confidence[valid].astype(np.float64)
+                else:
+                    # Upstream uses pixel centers (x+.5,y+.5) for rendered depth.
+                    pixels, xyz_cam = transform3d.get_3d_points_from_depth(template.depths, torch.from_numpy(crop_k.astype(np.float32))[None])
+                    source_pixel_centers = pixels[0].numpy()
+                    target = source_pixel_centers+flow
+                    crop_pose = crop_from_orig[0].numpy()@pose
+                    xyz = (xyz_cam[0].numpy()-crop_pose[:3, 3])@crop_pose[:3, :3]
+                    xx, yy = np.floor(target[..., 0]).astype(int), np.floor(target[..., 1]).astype(int)
+                    valid = template.masks[0].numpy() & np.isfinite(target).all(2) & (weight > .3)
+                    valid &= (xx >= 0) & (xx < 280) & (yy >= 0) & (yy < 280)
+                    crop_mask = data['crop_masks'][0].numpy()
+                    # The prior render can include surface behind a hand. Require
+                    # current visible foreground at the source projection too;
+                    # otherwise an occluded source can falsely match another part
+                    # of the object and still land inside the destination mask.
+                    valid &= crop_mask > .5
+                    valid &= crop_mask[np.clip(yy, 0, 279), np.clip(xx, 0, 279)] > .5
+                    obj_points = xyz[valid].astype(np.float64); target_points = target[valid].astype(np.float64)
+                    candidate_pixels = None
+                    candidate_weights = weight[valid]
                 # Deterministic subsampling and frame-local RANSAC RNG make
                 # early results invariant to the length of a later video suffix.
                 ids = np.linspace(0, len(obj_points)-1, min(len(obj_points), 10000), dtype=int)
@@ -1318,7 +1566,8 @@ class GoTrackRefiner:
                         rendered_depth='millimetres in crop camera',
                         object_points='GoTrack object/model coordinates in millimetres',
                         crop_targets='crop image pixel coordinates',
-                        source_pixel_centers='crop pixel centers returned by production depth unprojection',
+                        source_pixel_centers=('integer crop pixel indices used by integer_depth_points'
+                            if integer_profile else 'crop pixel centers returned by production depth unprojection'),
                         crop_from_orig='crop camera from native camera (C)',
                         initial_pose='crop camera from object; translation in millimetres',
                         native_pose='native camera from object; translation in metres',
@@ -1375,7 +1624,7 @@ class GoTrackRefiner:
                         )), dict(
                             full_obj_points_mm=obj_points,
                             full_target_crop_px=target_points,
-                            full_weights=weight[valid],
+                        full_weights=candidate_weights,
                             sample_ids=ids,
                             sample_obj_points_mm=obj_points[ids],
                             sample_target_crop_px=target_points[ids],
@@ -1407,13 +1656,18 @@ class GoTrackRefiner:
                     obj_points[ids], target_points[ids], crop_k, initial_rvec, initial_tvec)
                 if not success or inliers is None or len(inliers) < 6:
                     if chronological_capture:
-                        ransac_inlier_ids = (np.empty(0, dtype=np.int32) if inliers is None
-                                             else np.asarray(inliers).reshape(-1))
-                        self._emit_chronological_capture('result', dict(frame_id=int(frame.frame_id),
-                            iteration=int(iteration), rng_seed=int(rng_seed), fit_state='ransac_unavailable',
-                            solver_success=bool(success), ransac_inlier_count=int(len(ransac_inlier_ids))),
-                            dict(ransac_inlier_ids=ransac_inlier_ids,
-                                 retained_inlier_ids=ids[ransac_inlier_ids]))
+                        try:
+                            ransac_inlier_ids = (np.empty(0, dtype=np.int32) if inliers is None
+                                                 else np.asarray(inliers).reshape(-1))
+                            retained_inlier_ids = ids[ransac_inlier_ids]
+                            self._emit_chronological_capture('result', dict(frame_id=int(frame.frame_id),
+                                iteration=int(iteration), rng_seed=int(rng_seed), fit_state='ransac_unavailable',
+                                solver_success=bool(success), ransac_inlier_count=int(len(ransac_inlier_ids))),
+                                dict(ransac_inlier_ids=ransac_inlier_ids,
+                                     retained_inlier_ids=retained_inlier_ids))
+                        except Exception as exc:
+                            self._disable_chronological_capture(self.chronological_capture_callback,
+                                f'capture solver-index snapshot failed: {type(exc).__name__}: {exc}')
                     if diagnostic_capture:
                         ransac_inlier_ids = (np.empty(0, dtype=np.int32) if inliers is None
                                              else np.asarray(inliers).reshape(-1))
@@ -1427,14 +1681,26 @@ class GoTrackRefiner:
                             ))
                     return None
                 chosen = ids[inliers.ravel()]
+                if chronological_capture and self._inference_observer_capability is not None:
+                    self._emit_chronological_capture('pre_lm', dict(frame_id=int(frame.frame_id),
+                        iteration=int(iteration), rng_seed=int(rng_seed), solver_success=True,
+                        ransac_inlier_count=int(len(inliers))), dict(
+                        ransac_inlier_ids=np.asarray(inliers).reshape(-1), retained_inlier_ids=chosen,
+                        ransac_rvec=np.asarray(rvec).reshape(3),
+                        ransac_tvec_mm=np.asarray(tvec).reshape(3)))
                 rvec, tvec = cv2.solvePnPRefineLM(obj_points[chosen], target_points[chosen], crop_k, None, rvec, tvec)
                 refined = np.eye(4); refined[:3, :3] = cv2.Rodrigues(rvec)[0]; refined[:3, 3] = tvec.ravel()
-                pose = canonical_pose(np.linalg.inv(crop_from_orig[0].numpy())@refined)
+                pose = canonical_pose(np.linalg.inv(_capture_numpy(crop_from_orig[0]))@refined)
                 # Transform matched image rays back to native camera pixels.
-                rays = np.c_[target_points, np.ones(len(target_points))]@np.linalg.inv(crop_k).T
-                rays_orig = rays@crop_from_orig[0].numpy()[:3, :3]
-                projected = rays_orig@k.T; uv = projected[:, :2]/projected[:, 2:3]
-                final = PoseCandidate(pose_units(pose, .001), obj_points*.001, uv, weight[valid])
+                if integer_profile:
+                    uv = candidate_pixels
+                else:
+                    rays = np.c_[target_points, np.ones(len(target_points))]@np.linalg.inv(crop_k).T
+                    rays_orig = rays@crop_from_orig[0].numpy()[:3, :3]
+                    projected = rays_orig@k.T; uv = projected[:, :2]/projected[:, 2:3]
+                final = PoseCandidate(
+                    pose_units(pose, .001), obj_points*.001, uv, candidate_weights,
+                    ranker_features=ranker_features)
                 if diagnostic_capture:
                     ransac_inlier_ids = np.asarray(inliers).reshape(-1)
                     self._emit_diagnostic_capture(dict(

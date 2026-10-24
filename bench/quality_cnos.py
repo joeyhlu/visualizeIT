@@ -62,7 +62,7 @@ def build_descriptors(bundle, device='cuda', unlit=False, grayscale=False, outpu
     return target
 
 
-def detect(bundle, rgb, device='cuda', prior_mask=None, prior_age=None):
+def detect(bundle, rgb, device='cuda', prior_mask=None, prior_age=None, *, bank_path=None):
     upstream_path()
     import torch
     from model.config import FastSAMOpts
@@ -70,7 +70,7 @@ def detect(bundle, rgb, device='cuda', prior_mask=None, prior_age=None):
     manifest = json.loads((bundle/'input.json').read_text())
     path = CACHE/'checkpoints/FastSAM-x.pt'; lock = json.loads((CACHE/'lock.json').read_text())
     if digest(path) != lock['models'][path.name]['sha256']: raise ValueError('FastSAM checkpoint changed')
-    bank_path = CACHE/'banks'/f'{manifest["object"]}-cnos.npz'
+    bank_path = (CACHE/'banks'/f'{manifest["object"]}-cnos.npz' if bank_path is None else bank_path)
     if not bank_path.exists(): raise RuntimeError('CNOS template descriptors must be built before segmentation')
     with np.load(bank_path, allow_pickle=False) as bank:
         if str(bank['asset_sha256']) != digest(bundle/manifest['asset']): raise ValueError('Wrong CNOS object bank')

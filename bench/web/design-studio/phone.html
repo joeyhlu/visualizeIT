@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#1a1420"><meta name="color-scheme" content="dark"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="VisualizeIT"><title>VisualizeIT · Camera</title><link rel="manifest" href="/phone.webmanifest"><link rel="icon" href="/phone-icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/phone-icon.png"><link rel="stylesheet" href="/studio.css"><link rel="stylesheet" href="/phone.css"><script src="/design-engine.js" defer></script><script src="/phone-selection.js" defer></script><script src="/phone-tracker.js" defer></script><script src="/phone-glass-helpers.js" defer></script><script src="/phone-camera.js" defer></script><script src="/phone-pipeline.js" defer></script></head>
+<body class="glass-camera" data-phase="idle" data-surface="camera" data-analyze="idle" data-inspector="closed" data-confirmed="false" data-issue="none"><a class="skip" href="#scene">Skip to camera</a>
+<svg class="defs" width="0" height="0" aria-hidden="true" focusable="false"><defs><linearGradient id="vi-star" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8f7bff"/><stop offset=".5" stop-color="#e87ad8"/><stop offset="1" stop-color="#ffb37a"/></linearGradient></defs></svg>
+<main id="camera-studio" aria-label="VisualizeIT camera">
+<div class="camera-stage"><video id="camera" autoplay muted playsinline aria-hidden="true"></video><canvas id="scene" width="640" height="480" tabindex="0" role="img" aria-label="Camera off. Open the camera to begin." aria-describedby="scene-help"></canvas><div id="reticle" hidden aria-hidden="true"><span class="reticle-ring"></span><span id="reticle-label" class="reticle-label">Analyze point</span></div></div>
+<div class="edge-rim" aria-hidden="true"></div>
+
+<header class="camera-topbar">
+<button id="ask-open" class="round-glass" type="button" aria-label="Open idea helper" aria-controls="chat-surface" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17.5V7.5A2.5 2.5 0 0 1 7.5 5h9A2.5 2.5 0 0 1 19 7.5v6a2.5 2.5 0 0 1-2.5 2.5H10l-5 3.5z"/><path d="M9 9.5h6M9 12.5h4"/></svg></button>
+<div class="brand"><span class="brand-line"><svg class="brand-star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.7 5.1 3.6 8 9.5 9.5-5.9 1.5-8.8 4.4-9.5 9.5-.7-5.1-3.6-8-9.5-9.5 5.9-1.5 8.8-4.4 9.5-9.5z"/></svg><span class="brand-name">VisualizeIT</span></span><span id="phase" class="phase">Camera off</span></div>
+<button id="camera-menu-toggle" class="round-glass" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="camera-menu" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
+</header>
+
+<nav id="camera-menu" class="glass-menu" aria-label="Settings" hidden>
+<button id="show-design" type="button" hidden>View last design</button>
+<button id="switch" type="button" disabled>Switch camera</button>
+<button id="retake" type="button" disabled>Reset selection</button>
+<button id="stop" type="button" disabled>Stop camera</button>
+<button id="open-settings" type="button">Artwork options</button>
+<button id="open-pipeline" type="button" aria-haspopup="dialog" aria-controls="pipeline-dialog">Tracking pipeline</button>
+<a id="back-to-studio" class="menu-link" href="/">Back to studio</a>
+<button id="refresh-app" type="button">Refresh app</button>
+<p id="home-screen-help" class="menu-hint" hidden>Open in Safari, then Share → Add to Home Screen. Enable Open as Web App if shown, then launch the VisualizeIT icon.</p>
+<button id="copy-diagnostics" type="button">Copy diagnostics</button>
+<p id="copy-status" class="menu-hint" role="status" aria-live="polite"></p>
+<details class="camera-diagnostics"><summary>Camera diagnostics · local only</summary><button id="refresh-diagnostics" type="button">Refresh diagnostics</button><pre id="camera-diagnostics"></pre></details>
+</nav>
+
+<section id="empty-stage" class="camera-start" aria-label="Open camera"><button id="start" class="start-button" type="button">Open camera</button><span class="privacy-note">Your camera stays on this device.</span></section>
+
+<div class="camera-feedback">
+<button id="confirm-object" class="use-object" type="button" hidden disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.5l3.5 3.5 7.5-8"/></svg><span>Use object</span></button>
+<p id="camera-status" class="status-line" role="status" aria-live="polite">Open the camera to begin</p>
+</div>
+
+<nav id="primary-controls" class="primary-controls" aria-label="Camera actions">
+<button id="ask-button" class="dock-button" type="button" aria-controls="chat-surface" aria-expanded="false"><span class="dock-circle" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 17.5V7.5A2.5 2.5 0 0 1 7.5 5h9A2.5 2.5 0 0 1 19 7.5v6a2.5 2.5 0 0 1-2.5 2.5H10l-5 3.5z"/><path d="M9 9.5h6M9 12.5h4"/></svg></span><span class="dock-label">Ask</span></button>
+<button id="analyze" class="dock-button analyze" type="button" aria-pressed="false" aria-describedby="analyze-help"><span class="dock-circle analyze-circle" aria-hidden="true"><span class="analyze-core"></span></span><span class="dock-label">Analyze</span></button>
+<button id="design-button" class="dock-button" type="button" aria-controls="chooser-sheet" aria-expanded="false"><span class="dock-circle" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15.5 5.5l3 3L9 18H6v-3z"/><path d="M13 8l3 3M12 20h7"/></svg></span><span class="dock-label">Design</span></button>
+</nav>
+<p id="analyze-help" class="sr-only">Press and hold to outline the object in the center of the camera.</p>
+
+<!-- 1. Add design chooser -->
+<section id="chooser-sheet" class="surface chooser" role="dialog" aria-modal="true" aria-labelledby="chooser-title" aria-describedby="chooser-subtitle" hidden>
+<div id="chooser-scrim" class="surface-scrim" aria-hidden="true"></div>
+<div class="sheet">
+<button id="chooser-close" class="sheet-handle" type="button" aria-label="Close"><span aria-hidden="true"></span></button>
+<h2 id="chooser-title" class="sheet-title">Add a design</h2>
+<p id="chooser-subtitle" class="sheet-subtitle">Choose how you want to create.</p>
+<div class="pill-row">
+<button id="choose-generate" class="pill vivid" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4c.5 3.9 2.6 6 6.5 6.5-3.9.5-6 2.6-6.5 6.5-.5-3.9-2.6-6-6.5-6.5C7.4 10 9.5 7.9 10 4z"/><path d="M18 3v4M16 5h4"/></svg><span>Generate</span></button>
+<button id="import-design" class="pill clear" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m-4 4 4-4 4 4M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14"/></svg><span>Upload</span></button>
+</div>
+</div>
+</section>
+
+<!-- 2. Ask / chat full-screen overlay (local idea helper) -->
+<section id="chat-surface" class="surface chat" role="dialog" aria-modal="true" aria-labelledby="chat-title" hidden>
+<button id="chat-close" class="round-glass chat-close" type="button" aria-label="Close idea helper"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+<h2 id="chat-title" class="sr-only">Idea helper</h2>
+<p class="helper-label">Local idea helper · runs on this device, no AI service</p>
+<ol id="chat-log" class="chat-log" aria-live="polite" aria-label="Idea helper conversation"></ol>
+<div class="chat-dock">
+<button id="chat-use-brief" class="brief-chip" type="button" hidden>Create design from this brief</button>
+<form id="chat-form" class="chat-composer" autocomplete="off">
+<svg class="composer-spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4c.5 3.9 2.6 6 6.5 6.5-3.9.5-6 2.6-6.5 6.5-.5-3.9-2.6-6-6.5-6.5C7.4 10 9.5 7.9 10 4z"/><path d="M18 3v4M16 5h4"/></svg>
+<label class="sr-only" for="chat-input">Message the idea helper</label>
+<textarea id="chat-input" rows="1" maxlength="300" enterkeyhint="send" placeholder="Tell me more about your idea…"></textarea>
+<button id="chat-send" class="send-round" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z"/></svg></button>
+</form>
+</div>
+</section>
+
+<!-- 4. Generate design -->
+<section id="generate-surface" class="surface generate" role="dialog" aria-modal="true" aria-labelledby="generate-title" hidden>
+<form id="phone-prompt-form" class="sheet generate-sheet" autocomplete="off" novalidate>
+<div class="sheet-head"><svg class="head-spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4c.5 3.9 2.6 6 6.5 6.5-3.9.5-6 2.6-6.5 6.5-.5-3.9-2.6-6-6.5-6.5C7.4 10 9.5 7.9 10 4z"/><path d="M18 3v4M16 5h4"/></svg><h2 id="generate-title" class="sheet-title">Generate design</h2><button id="generate-close" class="sheet-close" type="button" aria-label="Close generate design"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+<div class="prompt-field">
+<svg class="field-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20 15 9M14 5l1-2 1 2 2 1-2 1-1 2-1-2-2-1zM19 12l.6-1.2L21 10l-1.4-.8L19 8l-.6 1.2L17 10l1.4.8z"/></svg>
+<label class="sr-only" for="phone-prompt">Describe the design</label>
+<textarea id="phone-prompt" maxlength="500" rows="3" enterkeyhint="go" placeholder="Describe the design you want…" aria-describedby="generate-capability"></textarea>
+<span id="prompt-count" class="char-count" aria-hidden="true">0/500</span>
+</div>
+<p id="generate-capability" class="capability">Local pattern generator: draws patterns, colors and quoted text. Object words stay in your brief.</p>
+<h3 id="ideas-title" class="ideas-title">Prompt ideas</h3>
+<div id="prompt-ideas" class="idea-row" role="group" aria-labelledby="ideas-title">
+<button class="idea-chip" type="button" data-idea="A minimalist chair" aria-pressed="false">A minimalist chair</button>
+<button class="idea-chip" type="button" data-idea="A ceramic vase" aria-pressed="false">A ceramic vase</button>
+<button class="idea-chip" type="button" data-idea="A pair of sneakers" aria-pressed="false">A pair of sneakers</button>
+<button class="idea-chip" type="button" data-idea="Headphones" aria-pressed="false">Headphones</button>
+<button class="idea-chip" type="button" data-idea="A plant" aria-pressed="false">A plant</button>
+<button class="idea-chip" type="button" data-idea="A car model" aria-pressed="false">A car model</button>
+</div>
+<p id="prompt-status" class="prompt-status" role="status" aria-live="polite"></p>
+<button id="generate-artwork" class="cta vivid" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4c.5 3.9 2.6 6 6.5 6.5-3.9.5-6 2.6-6.5 6.5-.5-3.9-2.6-6-6.5-6.5C7.4 10 9.5 7.9 10 4z"/><path d="M18 3v4M16 5h4"/></svg><span>Generate image</span></button>
+</form>
+</section>
+
+<!-- 6. Design generated result: independent flat card floating in front of the scene -->
+<section id="artwork-inspector" class="surface result inspector" role="dialog" aria-modal="true" aria-labelledby="result-title" hidden>
+<div id="preview-gesture" tabindex="0" role="group" aria-label="Design preview. Drag to tilt; it springs back to center. Pinch, scroll or use plus and minus to zoom. Arrow keys adjust the view."><div id="artwork-entrance" class="artwork-entrance"><div class="artwork-float"><div id="preview-card"><canvas id="artwork-reveal" width="512" height="512" aria-hidden="true"></canvas><canvas id="artwork-back" width="512" height="512" aria-hidden="true"></canvas></div><div class="preview-shadow" aria-hidden="true"></div></div></div></div>
+<div class="sheet result-sheet">
+<div class="sheet-head"><svg class="head-spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4c.5 3.9 2.6 6 6.5 6.5-3.9.5-6 2.6-6.5 6.5-.5-3.9-2.6-6-6.5-6.5C7.4 10 9.5 7.9 10 4z"/><path d="M18 3v4M16 5h4"/></svg><div class="head-text"><h2 id="result-title" class="sheet-title">Design generated</h2><p id="result-copy" class="sheet-subtitle">You can move, resize, or generate a new design.</p></div><button id="close-preview" class="sheet-close" type="button" aria-label="Close design preview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+<p id="preview-status" class="preview-status" role="status" aria-live="polite"></p>
+<div class="pill-row">
+<button id="result-regenerate" class="pill vivid" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4c.5 3.9 2.6 6 6.5 6.5-3.9.5-6 2.6-6.5 6.5-.5-3.9-2.6-6-6.5-6.5C7.4 10 9.5 7.9 10 4z"/><path d="M18 3v4M16 5h4"/></svg><span>Regenerate</span></button>
+<button id="result-upload" class="pill clear" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 9.5"/><path d="M12 12v8m-3-3 3 3 3-3"/></svg><span>Upload</span></button>
+</div>
+<button id="view-options-toggle" class="text-toggle" type="button" aria-expanded="false" aria-controls="view-options">More view controls</button>
+<div id="view-options" class="view-options" hidden>
+<div class="view-tools" role="toolbar" aria-label="Preview controls"><button id="rotate-preview" type="button" aria-pressed="true">Rotate</button><button id="pan-preview" type="button" aria-pressed="false">Move</button><button id="reset-preview" type="button">Reset</button><button id="apply-preview" type="button" disabled>Apply</button></div>
+<p id="apply-status" class="apply-status"></p>
+</div>
+</div>
+</section>
+
+<p id="scene-help" class="sr-only">The camera stays live. Hold Analyze to outline the object in the center, then choose Use object. The marker only shows where analysis started; the mint outline appears only while the object is tracked on live frames. Use Design to generate or upload a design and Ask for the local idea helper.</p>
+</main>
+<input id="design-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+<dialog id="artwork-options" class="artwork-sheet" aria-labelledby="artwork-heading"><div class="sheet-heading"><div><p class="eyebrow">A pattern, in place.</p><h2 id="artwork-heading">Your artwork</h2></div><button id="close-settings" type="button" aria-label="Close artwork options">✕</button></div>
+<div class="artwork-row"><canvas id="artwork-preview" width="1024" height="1024" role="img" aria-label="Current artwork"></canvas><div><button id="export-artwork" type="button">Save artwork PNG</button><p id="artwork-source-note" class="hint">Made locally from a pattern recipe.</p></div></div>
+<fieldset id="placement" disabled><legend>Placement</legend><label for="placement-x">Horizontal <output id="placement-x-value">0%</output></label><input id="placement-x" type="range" min="-100" max="100" value="0"><label for="placement-y">Vertical <output id="placement-y-value">0%</output></label><input id="placement-y" type="range" min="-100" max="100" value="0"><label for="placement-scale">Size <output id="placement-scale-value">100%</output></label><input id="placement-scale" type="range" min="10" max="250" value="100"><label for="placement-rotation">Rotation <output id="placement-rotation-value">0°</output></label><input id="placement-rotation" type="range" min="-180" max="180" value="0"><label for="placement-opacity">Opacity <output id="placement-opacity-value">80%</output></label><input id="placement-opacity" type="range" min="0" max="100" value="80"><div id="placement-controls" class="sheet-actions"><button id="center-artwork" type="button">Reset placement</button><button id="export-mockup" type="button">Save current view PNG</button></div></fieldset>
+<details><summary>Recent designs</summary><ol id="ask-history" class="ask-history" aria-label="Local generator history"></ol></details>
+<details><summary>About this preview</summary><p>Designs are made by a finite local pattern generator: solid, stripes, checker, dots, waves, grid, named colors or #RRGGBB, quoted text, scale, rotation and seed. It does not draw objects or understand photos. The idea helper is a local, rule-based assistant, not an AI service. Tracking is experimental 2D translation: it does not estimate depth or wrap curved surfaces, and clear, glossy or plain objects often cannot be tracked. Imported PNG, JPEG or WebP images stay on this device. If tracking is uncertain, the outline and overlay disappear.</p><p id="runtime-status" class="hint" role="status">Local object selection loads when the camera opens.</p></details></dialog>
+<dialog id="pipeline-dialog" class="pipeline-sheet" aria-labelledby="pipeline-heading" aria-describedby="pipeline-scope">
+<div class="pipeline-head"><h2 id="pipeline-heading">Tracking pipeline</h2><button id="pipeline-close" class="pipeline-icon" type="button" aria-label="Close tracking pipeline">✕</button></div>
+<p id="pipeline-scope" class="pipeline-note">Shows what the local workbench reports. Live phone tracking with the trained model is unavailable; camera frames are never sent.</p>
+<form id="pipeline-pair" class="pipeline-row" autocomplete="off"><label for="pipeline-token">Startup token</label><input id="pipeline-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" maxlength="128"><button id="pipeline-pair-submit" class="pipeline-primary" type="submit">Pair</button></form>
+<section class="pipeline-status" aria-labelledby="pipeline-status-heading">
+<h3 id="pipeline-status-heading">Status</h3>
+<p><strong id="pipeline-state" data-state="none">Not paired</strong></p>
+<dl class="pipeline-facts">
+<dt>Pinned head</dt><dd id="pipeline-pin">—</dd>
+<dt>Reported by workbench</dt><dd id="pipeline-reported">—</dd>
+<dt>Installed head</dt><dd id="pipeline-installed">—</dd>
+<dt>Registered clips</dt><dd id="pipeline-clipcount">unknown</dd>
+<dt>Live phone tracking</dt><dd>Unavailable · live neural contract unsupported</dd>
+</dl>
+<div id="pipeline-blockers-wrap" hidden><h3>Blocked requirements</h3><ul id="pipeline-blockers" class="pipeline-blockers"></ul></div>
+<p id="pipeline-message" class="pipeline-note" role="status" aria-live="polite"></p>
+</section>
+<div id="pipeline-paired" class="pipeline-actions" hidden><button id="pipeline-refresh" type="button">Refresh</button><button id="pipeline-disconnect" type="button">Disconnect</button></div>
+<section class="pipeline-save" aria-labelledby="pipeline-save-heading">
+<h3 id="pipeline-save-heading">Save artwork for workbench</h3>
+<p class="pipeline-note"><strong>Manual import; not applied to tracking.</strong> Saves the current generated pattern and its PNG to this studio and creates a handoff. Uploaded images can't be saved here; use Save artwork PNG in Artwork options.</p>
+<label for="pipeline-name">Name</label><input id="pipeline-name" type="text" maxlength="80" autocomplete="off" value="Phone artwork">
+<label for="pipeline-clip">Workbench clip (optional)</label><select id="pipeline-clip"><option value="">No clip · artwork only</option></select>
+<button id="pipeline-save" class="pipeline-primary" type="button" disabled>Save artwork for workbench</button>
+<p id="pipeline-save-status" class="pipeline-note" role="status" aria-live="polite"></p>
+</section>
+</dialog></body></html>

@@ -398,8 +398,14 @@ def _pnp_tracking_settings(bundle_object, pnp_no_extrinsic_guess):
 
 
 def _make_gotrack_refiner(network, renderer, object_id, device, pnp_settings,
-                          chronological_capture_callback=None):
+                          chronological_capture_callback=None, inference_context=None):
     from .quality_gotrack import GoTrackRefiner
+    if inference_context is not None:
+        if chronological_capture_callback is not None:
+            raise ValueError('Configured GoTrack inference does not support capture callbacks')
+        return GoTrackRefiner(network, renderer, object_id, device,
+            pnp_use_extrinsic_guess=pnp_settings['pnp_use_extrinsic_guess'],
+            inference_geometry=inference_context.profile)
     if chronological_capture_callback is None:
         return GoTrackRefiner(network, renderer, object_id, device,
             pnp_use_extrinsic_guess=pnp_settings['pnp_use_extrinsic_guess'])
@@ -408,11 +414,115 @@ def _make_gotrack_refiner(network, renderer, object_id, device, pnp_settings,
         chronological_capture_callback=chronological_capture_callback)
 
 
+def _make_pose_renderer(bundle, manifest, *, unlit_templates,
+                        disable_multisampling, inference_context=None):
+    from .quality_gotrack import TexturedRenderer
+    asset = bundle / manifest['asset']
+    if inference_context is None:
+        return TexturedRenderer(asset, manifest['object_id'],
+            unlit=unlit_templates, disable_multisampling=disable_multisampling)
+    from .quality_gotrack_inference import COORDINATE_MODE
+    return TexturedRenderer(asset, manifest['object_id'],
+        unlit=unlit_templates, disable_multisampling=disable_multisampling,
+        coordinate_mode=COORDINATE_MODE)
+
+
+def _load_inference_head(network, inference_context, device):
+    if inference_context is None:
+        return network, None
+    from .quality_gotrack_inference import install_adapted_head
+    if inference_context.head_path is None:
+        return network, inference_context.identity_dict()
+    return install_adapted_head(network, inference_context, device=device)
+
+
+def _bind_inference_masks(inference_context, identity, masks_root, mask_records):
+    if inference_context is None:
+        return None
+    from .quality_gotrack_inference import bind_runtime_mask_provenance
+    return bind_runtime_mask_provenance(inference_context,
+        digest(Path(masks_root) / 'results.json'), mask_records,
+        profile_identity=identity)
+
+
+def _inference_frame_identity(run_identity, record):
+    if run_identity is None:
+        return None
+    value = json.loads(json.dumps(run_identity))
+    value['mask_cache_frame'] = {'path': record.get('path'),
+                                 'sha256': record.get('mask_sha256')}
+    return value
+
+
+def _validate_inference_runner_options(context, *, mode, forced_occlusion,
+                                       model_memory, unlit_templates,
+                                       appearance_check, disable_multisampling,
+                                       pnp_no_extrinsic_guess,
+                                       chronological_mug_capture_root,
+                                       chronological_mug_capture_branch):
+    if context is None:
+        return
+    if (mode != 'complete' or forced_occlusion is not None or model_memory or
+            appearance_check or pnp_no_extrinsic_guess or
+            chronological_mug_capture_root is not None or
+            chronological_mug_capture_branch is not None or
+            not unlit_templates or not disable_multisampling):
+        raise ValueError('Configured GoTrack inference requires complete mode, unlit/no-MSAA templates, and no diagnostic, capture, memory, or PnP ablation options')
+
+
+def _save_inference_failure(output, context, identity, exception):
+    if context is None:
+        return
+    target = Path(output)
+    receipt = {
+        'schema_version': 1,
+        'status': 'failed',
+        'stage_completed': False,
+        'complete': False,
+        'failure_reason': f'{type(exception).__name__}: {exception}',
+        'frames': [],
+        'provenance': {'gotrack_inference': identity or context.identity_dict()},
+    }
+    if target.exists():
+        try:
+            previous = json.loads(target.read_text(encoding='utf-8'))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            previous = None
+        if isinstance(previous, dict):
+            previous.update(status='failed', stage_completed=False, complete=False,
+                            failure_reason=receipt['failure_reason'])
+            previous.setdefault('provenance', {})['gotrack_inference'] = receipt['provenance']['gotrack_inference']
+            receipt = previous
+    save_result(target, receipt)
+
+
+def _model_only_smoke_pose(vertices_m, intrinsics, width, height):
+    """A virtual view derived solely from known mesh extent and camera FOV."""
+    vertices = np.asarray(vertices_m, dtype=np.float64)
+    k = np.asarray(intrinsics, dtype=np.float64)
+    if (vertices.ndim != 2 or vertices.shape[1] != 3 or not len(vertices) or
+            not np.isfinite(vertices).all() or k.shape != (3, 3) or
+            not np.isfinite(k).all() or k[0, 0] <= 0 or k[1, 1] <= 0 or width <= 0 or height <= 0):
+        raise ValueError('Model smoke requires finite metric geometry and camera dimensions')
+    center = (vertices.min(axis=0) + vertices.max(axis=0)) * .5
+    radius = float(np.max(np.linalg.norm(vertices - center, axis=1)))
+    if radius <= 0 or not (0 < k[0, 2] < width and 0 < k[1, 2] < height):
+        raise ValueError('Model smoke requires a nondegenerate mesh and interior principal point')
+    margin = min(k[0, 2], width - k[0, 2], k[1, 2], height - k[1, 2])
+    distance = max(.1, radius * (2 + 2 * max(k[0, 0], k[1, 1]) / margin))
+    if distance + radius >= 30:
+        raise ValueError('Metric mesh does not fit the smoke renderer depth range')
+    pose = np.eye(4)
+    pose[:3, 3] = -center + np.array([0., 0., distance])
+    return pose
+
+
 def smoke(bundle, output, device, unlit_templates=False, disable_multisampling=False):
     # The raw timing table and all inference-source hashes are validated before
     # loading the network, renderer, or decoder.
     manifest = read_input(bundle)
-    if not isinstance(manifest.get('controlled_initial_pose'), list):
+    model_only = not isinstance(manifest.get('controlled_initial_pose'), list)
+    if model_only and manifest['_timing']['clock_mode'] != PHYSICAL:
         raise ValueError('Setup smoke requires a declared controlled_initial_pose')
     setup_ordinal = manifest.get('setup_frame_id')
     if setup_ordinal is None:
@@ -427,16 +537,18 @@ def smoke(bundle, output, device, unlit_templates=False, disable_multisampling=F
     from utils import structs, renderer_base
     network = load_network(device)
     renderer = TexturedRenderer(bundle/manifest['asset'], manifest['object_id'], unlit=unlit_templates, disable_multisampling=disable_multisampling)
-    pose = np.array(manifest['controlled_initial_pose']); k = np.array(manifest['intrinsics'])
-    # A supplied setup pose is legitimate for renderer validation only.
-    # It never enters complete-pipeline initialization.
-    h = 280; w = round(manifest['native_resolution'][0]*h/manifest['native_resolution'][1]); scale = h/manifest['native_resolution'][1]
-    small_k = k.copy(); small_k[:2] *= scale
-    camera = structs.PinholePlaneCameraModel(width=w, height=h, f=(small_k[0, 0], small_k[1, 1]),
-        c=(small_k[0, 2], small_k[1, 2]), T_world_from_eye=np.linalg.inv(pose.copy()))
-    camera.T_world_from_eye[:3, 3] *= 1000
-    started = time.perf_counter()
     try:
+        k = np.array(manifest['intrinsics'])
+        pose = (_model_only_smoke_pose(renderer.vertices_m, k, *manifest['native_resolution'])
+                if model_only else np.array(manifest['controlled_initial_pose']))
+        # A supplied setup pose is legitimate for renderer validation only.
+        # It never enters complete-pipeline initialization.
+        h = 280; w = round(manifest['native_resolution'][0]*h/manifest['native_resolution'][1]); scale = h/manifest['native_resolution'][1]
+        small_k = k.copy(); small_k[:2] *= scale
+        camera = structs.PinholePlaneCameraModel(width=w, height=h, f=(small_k[0, 0], small_k[1, 1]),
+            c=(small_k[0, 2], small_k[1, 2]), T_world_from_eye=np.linalg.inv(pose.copy()))
+        camera.T_world_from_eye[:3, 3] *= 1000
+        started = time.perf_counter()
         rendered = renderer.render_object_model(manifest['object_id'], camera)
         mesh = read_glb(bundle/manifest['asset'], manifest['object'])
         control = render(mesh, camera_for((pose[:3, :3], pose[:3, 3]), small_k, w, h))
@@ -447,19 +559,24 @@ def smoke(bundle, output, device, unlit_templates=False, disable_multisampling=F
         extent_ok = bool(np.allclose(np.ptp(renderer.vertices_m, axis=0), np.ptp(mesh.positions, axis=0), atol=1e-5))
         if iou < .94 or error is None or error > .002 or not extent_ok:
             raise RuntimeError(f'Renderer/unit smoke gate failed: IoU {iou}, median depth error {error}, extent {extent_ok}')
-        rgb = read_rgb(bundle, manifest, setup_ordinal)
+        rgb = (np.rint(rendered[renderer_base.RenderType.COLOR] * 255).clip(0, 255).astype(np.uint8)
+               if model_only else read_rgb(bundle, manifest, setup_ordinal))
+        inference_k = small_k if model_only else k
         # Smoke mask is a labelled geometric control, never scored segmentation.
-        native_camera = structs.PinholePlaneCameraModel(width=rgb.shape[1], height=rgb.shape[0], f=(k[0, 0], k[1, 1]),
-            c=(k[0, 2], k[1, 2]), T_world_from_eye=camera.T_world_from_eye)
-        mask = renderer.render_object_model(manifest['object_id'], native_camera)[renderer_base.RenderType.MASK]
+        native_camera = structs.PinholePlaneCameraModel(width=rgb.shape[1], height=rgb.shape[0], f=(inference_k[0, 0], inference_k[1, 1]),
+            c=(inference_k[0, 2], inference_k[1, 2]), T_world_from_eye=camera.T_world_from_eye)
+        mask = (pred if model_only else renderer.render_object_model(manifest['object_id'], native_camera)[renderer_base.RenderType.MASK])
         smoke_key = _frame_key(manifest, setup_ordinal)
-        smoke_frame = Frame(smoke_key.frame_id, rgb, k, smoke_key.timestamp_s, smoke_key.clock_mode)
+        smoke_frame = Frame(smoke_key.frame_id, rgb, inference_k, smoke_key.timestamp_s, smoke_key.clock_mode)
         candidate = GoTrackRefiner(network, renderer, manifest['object_id'], device).refine(smoke_frame, mask, pose)
         if candidate is None: raise RuntimeError('Network loaded but could not refine setup smoke frame')
         result = dict(checkpoint_loaded=True, renderer_iou=iou, renderer_median_depth_error_m=error,
             metric_extent_verified=extent_ok, inference_completed=True, smoke_passed=True,
             runtime=device_info(device), unlit_templates=unlit_templates, disable_multisampling=disable_multisampling, elapsed_ms=(time.perf_counter()-started)*1000,
             scope='Setup-only renderer and inference smoke; projected mask control is NOT foreground prediction or benchmark accuracy.')
+        if model_only:
+            result.update(scope='Model-only virtual-view smoke: no video pixels or evaluation poses consumed; synthetic foreground is not segmentation evidence.',
+                          model_only=True, asset_sha256=renderer.asset_sha256)
         output.parent.mkdir(parents=True, exist_ok=True); output.write_text(json.dumps(result, indent=2))
     finally: renderer.close()
 
@@ -2173,11 +2290,21 @@ def _physical_unmeasured_row(key, source_frame_id, reason, *, mask_record=None,
     return row
 
 
+def _install_seed_attribution(backend, observer):
+    """Install the opt-in metadata observer without changing the default path."""
+    if observer is None:
+        return backend
+    from .quality_seed_attribution import SeedAttributionBackend
+    return SeedAttributionBackend(backend, observer)
+
+
 def _pose_stage_physical(bundle, masks_root, output, device, mode, limit,
                          forced_occlusion, model_memory, unlit_templates,
                          appearance_check, disable_multisampling,
                          pnp_no_extrinsic_guess, manifest, mask_manifest,
-                         mask_records):
+                         mask_records, ranking_options=None,
+                         seed_attribution_observer=None,
+                         inference_context=None, inference_state=None):
     """Execute a fully joined physical-time pose prefix without dropping rows."""
     from dataclasses import asdict
 
@@ -2228,15 +2355,24 @@ def _pose_stage_physical(bundle, masks_root, output, device, mode, limit,
         ('-unlit' if unlit_templates else '')+('-no-msaa' if disable_multisampling else '')+'.json')
     if not smoke_path.exists() or not _read_json_unique(smoke_path).get('smoke_passed'):
         raise RuntimeError('Run and pass quality_runner smoke before video evaluation')
-    network = load_network(device)
-    renderer = TexturedRenderer(bundle/manifest['asset'], manifest['object_id'],
-        unlit=unlit_templates, disable_multisampling=disable_multisampling)
+    network = None
+    renderer = None
     appearance_renderer = None
     try:
+        network = load_network(device)
+        network, head_identity = _load_inference_head(network, inference_context, device)
+        if inference_state is not None and head_identity is not None:
+            inference_state['identity'] = head_identity
+        renderer = _make_pose_renderer(bundle, manifest,
+            unlit_templates=unlit_templates,
+            disable_multisampling=disable_multisampling,
+            inference_context=inference_context)
         bank = torch.load(CACHE/'banks'/f'{manifest["object"]}-foundpose.pt',
                           map_location='cpu', weights_only=False)
-        refiner = _make_gotrack_refiner(network, renderer, manifest['object_id'], device, pnp_settings)
+        refiner = _make_gotrack_refiner(network, renderer, manifest['object_id'], device,
+            pnp_settings, inference_context=inference_context)
         backend = FoundPoseRecovery(refiner, bank, model_memory=model_memory, time_policy=policy)
+        backend = _install_seed_attribution(backend, seed_attribution_observer)
         appearance_settings = None
         if appearance_check:
             appearance_renderer = TexturedRenderer(bundle/manifest['asset'], manifest['object_id'],
@@ -2246,14 +2382,36 @@ def _pose_stage_physical(bundle, masks_root, output, device, mode, limit,
                 appearance_settings, time_policy=policy)
 
         initial = manifest.get('controlled_initial_pose') if mode == 'controlled' else None
+        profile_identity = None
+        if inference_context is not None:
+            profile_identity = _bind_inference_masks(inference_context,
+                head_identity or inference_context.identity_dict(), masks_root, mask_records)
+            if inference_state is not None:
+                inference_state['identity'] = profile_identity
+        ranking_kwargs = {}
+        if ranking_options is not None and ranking_options.active:
+            from .quality_pipeline import configure_ranking
+            ranker_provenance = inference_provenance(bundle)
+            if profile_identity is not None:
+                ranker_provenance['gotrack_inference'] = profile_identity
+            ranker, sink = configure_ranking(ranking_options, refiner=refiner,
+                manifest=manifest, provenance=ranker_provenance)
+            ranking_kwargs = dict(pose_ranker=ranker, candidate_sink=sink,
+                                  appearance_timing_source=refiner)
         tracker = SequentialTracker(backend, initial_pose=initial, time_policy=policy,
             initial_frame_id=0 if initial is not None else None,
-            initial_timestamp_s=setup_key.timestamp_s if initial is not None else None)
+            initial_timestamp_s=setup_key.timestamp_s if initial is not None else None,
+            **ranking_kwargs)
         provenance = inference_provenance(bundle)
+        if profile_identity is not None:
+            provenance['gotrack_inference'] = profile_identity
+        if ranking_options is not None and ranking_options.active:
+            provenance['ranking'] = _ranking_provenance(ranking_options)
         provenance['foundpose_bank_sha256'] = digest(CACHE/'banks'/f'{manifest["object"]}-foundpose.pt')
         provenance['input_manifest_sha256'] = timing['manifest_sha256']
         provenance['timestamp_table_sha256'] = timing['timestamp_table_sha256']
-        k = np.array(manifest['intrinsics'])
+        k = (inference_context.effective_intrinsics if inference_context is not None
+             else np.array(manifest['intrinsics']))
         output = Path(output)
         output.parent.mkdir(parents=True, exist_ok=True)
         timeline_rows = {row['frame_id']: row for row in timeline}
@@ -2302,7 +2460,16 @@ def _pose_stage_physical(bundle, masks_root, output, device, mode, limit,
                     rgb_state='decoded', mask_measurement_state=setup_record.get('measurement_state'),
                     mask_path=setup_record.get('path'), mask_sha256=setup_record.get('mask_sha256'))
 
+        if profile_identity is not None and initialization is not None:
+            setup_record = mask_records.get(setup_key.frame_id) if setup_key is not None else None
+            initialization['gotrack_inference'] = _inference_frame_identity(
+                profile_identity, setup_record or {})
+
         def save_physical_result(stage_completed):
+            if profile_identity is not None:
+                for row in result_rows:
+                    record = mask_records.get(row.get('frameId'), {})
+                    row['gotrack_inference'] = _inference_frame_identity(profile_identity, record)
             full_window = len(requested_keys) == len(scored_keys) and stage_completed
             segmentation_complete = (mask_manifest.get('status') == 'complete' and
                                      mask_manifest.get('stage_completed') is True)
@@ -2343,6 +2510,16 @@ def _pose_stage_physical(bundle, masks_root, output, device, mode, limit,
             save_result(output, result)
 
         # Retain setup failures in initialization and every scored row in frames.
+        def trace_unmeasured(key, row):
+            sink = ranking_kwargs.get('candidate_sink')
+            if sink is not None and key.frame_id in requested_set:
+                sink(dict(frame_id=key.frame_id, timestamp_s=key.timestamp_s,
+                    clock_mode=PHYSICAL, context={'recovery': True, 'mask_state': row['mask_state']},
+                    candidates=[], rank_decision=None, legacy_choice=None,
+                    pose_state=row['pose_state'], render_state=row['render_state'],
+                    cameraFromObject=None, failure_reason=row['failure_reason'],
+                    timings_ms=row.get('timings_ms', {})))
+
         if initialization is not None and initialization.get('terminal'):
             # The current physical cleanup state is uncertain.  Do not decode any
             # scored image or mask after it; preserve them as explicit failures.
@@ -2353,6 +2530,7 @@ def _pose_stage_physical(bundle, masks_root, output, device, mode, limit,
                 result_rows.append(_physical_unmeasured_row(key,
                     all_source_ids[key.frame_id], reason,
                     mask_record=record))
+                trace_unmeasured(key, result_rows[-1])
             save_physical_result(False)
             return
 
@@ -2368,6 +2546,7 @@ def _pose_stage_physical(bundle, masks_root, output, device, mode, limit,
             if tracker.terminal:
                 result_rows.append(_physical_unmeasured_row(key, source_id,
                     'motion_cleanup_unconfirmed', mask_record=record))
+                trace_unmeasured(key, result_rows[-1])
                 continue
             try:
                 rgb = read_rgb(bundle, manifest, key.frame_id)
@@ -2418,20 +2597,61 @@ def _pose_stage_physical(bundle, masks_root, output, device, mode, limit,
         # suffix rows, so the final receipt always preserves every scored key.
         save_physical_result(stage_completed)
     finally:
-        renderer.close()
+        if renderer is not None:
+            renderer.close()
         if appearance_renderer is not None:
             appearance_renderer.close()
+
+
+def _ranking_provenance(options):
+    from .quality_ranker_features import FEATURE_NAMES, FEATURE_SCHEMA_VERSION
+    return dict(name=options.name, feature_schema_version=FEATURE_SCHEMA_VERSION,
+        feature_names=list(FEATURE_NAMES), patch_features=options.patch_features or options.name in ('learned', 'confidence-research', 'ordering-research'),
+        checkpoint_sha256=None if options.checkpoint is None else digest(options.checkpoint),
+        adapter_sha256={name: digest(Path(__file__).with_name(name + '.py')) for name in
+                       ('quality_pipeline', 'quality_pose_ranker', 'quality_ranker_features')})
 
 
 def pose_stage(bundle, masks_root, output, device, mode, limit=None, forced_occlusion=None, model_memory=False,
                unlit_templates=False, appearance_check=False, disable_multisampling=False,
                pnp_no_extrinsic_guess=False, chronological_mug_capture_root=None,
-               chronological_mug_capture_branch=None):
+               chronological_mug_capture_branch=None, *, ranking_options=None,
+               seed_attribution_observer=None, inference_options=None,
+               inference_context=None, inference_state=None):
+    if ranking_options is not None:
+        ranking_options.validate()
+    if inference_options is not None:
+        inference_options.validate()
     manifest = read_input(bundle)
+    if inference_context is None and inference_options is not None:
+        from .quality_gotrack_inference import prepare_inference
+        inference_context = prepare_inference(inference_options, bundle, manifest)
+    if (inference_context is not None and
+            Path(bundle).resolve(strict=True) != inference_context.bundle):
+        raise ValueError('Configured GoTrack inference context is bound to a different bundle path')
+    _validate_inference_runner_options(inference_context, mode=mode,
+        forced_occlusion=forced_occlusion, model_memory=model_memory,
+        unlit_templates=unlit_templates, appearance_check=appearance_check,
+        disable_multisampling=disable_multisampling,
+        pnp_no_extrinsic_guess=pnp_no_extrinsic_guess,
+        chronological_mug_capture_root=chronological_mug_capture_root,
+        chronological_mug_capture_branch=chronological_mug_capture_branch)
+    if inference_context is not None:
+        output = Path(output)
+        if output.exists():
+            raise ValueError('Configured GoTrack inference refuses to overwrite an existing pose output')
+        if (ranking_options is not None and ranking_options.trace is not None and
+                Path(ranking_options.trace).exists()):
+            raise ValueError('Configured GoTrack inference refuses to overwrite an existing candidate trace')
+        if inference_state is None:
+            inference_state = {'identity': inference_context.identity_dict()}
+        else:
+            inference_state.setdefault('identity', inference_context.identity_dict())
     if manifest.get('_capture') is not None:
         if (mode != 'complete' or forced_occlusion is not None or model_memory or
                 appearance_check or pnp_no_extrinsic_guess or
-                chronological_mug_capture_root is not None or chronological_mug_capture_branch is not None):
+                chronological_mug_capture_root is not None or chronological_mug_capture_branch is not None or
+                seed_attribution_observer is not None):
             raise ValueError('Capture pose currently supports only the bounded complete-mode option set')
         scored_count = len(manifest['_timing']['scored_keys'])
         if limit is not None and (type(limit) is not int or limit <= 0 or limit > scored_count):
@@ -2449,10 +2669,21 @@ def pose_stage(bundle, masks_root, output, device, mode, limit=None, forced_occl
             raise ValueError('Chronological capture does not support physical time')
         pnp_settings = _pnp_tracking_settings(manifest['object'], pnp_no_extrinsic_guess)
         mask_manifest, mask_records = _physical_mask_cache(manifest, masks_root)
-        return _pose_stage_physical(bundle, masks_root, output, device, mode, limit,
-            forced_occlusion, model_memory, unlit_templates, appearance_check,
-            disable_multisampling, pnp_no_extrinsic_guess, manifest,
-            mask_manifest, mask_records)
+        if inference_context is not None:
+            from .quality_gotrack_inference import validate_physical_mask_producer
+            validate_physical_mask_producer(inference_context, mask_manifest)
+        try:
+            return _pose_stage_physical(bundle, masks_root, output, device, mode, limit,
+                forced_occlusion, model_memory, unlit_templates, appearance_check,
+                disable_multisampling, pnp_no_extrinsic_guess, manifest,
+                mask_manifest, mask_records, ranking_options,
+                seed_attribution_observer, inference_context, inference_state)
+        except Exception as exc:
+            _save_inference_failure(output, inference_context,
+                None if inference_state is None else inference_state.get('identity'), exc)
+            raise
+    if seed_attribution_observer is not None:
+        raise ValueError('Seed attribution supports only physical-time pose inference')
     manifest = manifest
     pnp_settings = _pnp_tracking_settings(manifest['object'], pnp_no_extrinsic_guess)
     capture_requested = chronological_mug_capture_root is not None or chronological_mug_capture_branch is not None
@@ -2487,46 +2718,81 @@ def pose_stage(bundle, masks_root, output, device, mode, limit=None, forced_occl
     if diagnostic and output.name in ('complete.json', 'controlled.json'):
         raise ValueError('Diagnostic mask controls must not overwrite automatic benchmark results')
     mask_records = {r['frameId']: r for r in mask_manifest['frames']}
-    network = load_network(device); renderer = TexturedRenderer(bundle/manifest['asset'], manifest['object_id'], unlit=unlit_templates, disable_multisampling=disable_multisampling)
-    bank = torch.load(CACHE/'banks'/f'{manifest["object"]}-foundpose.pt', map_location='cpu', weights_only=False)
-    capture = None
-    if capture_requested:
-        from .quality_mug_chronological_capture import ChronologicalCaptureBackend, MugChronologicalCapture
-        capture = MugChronologicalCapture(chronological_mug_capture_root,
-            chronological_mug_capture_branch, capture_trace, bundle=bundle, masks_root=masks_root)
-    refiner = _make_gotrack_refiner(network, renderer, manifest['object_id'], device, pnp_settings,
-        chronological_capture_callback=capture)
-    backend = FoundPoseRecovery(refiner, bank, model_memory=model_memory)
-    if capture is not None:
-        backend = ChronologicalCaptureBackend(backend, refiner, capture)
-    appearance_renderer = None; appearance_settings = None
-    if appearance_check:
-        from .quality_appearance import AppearanceCheckedBackend, AppearanceSettings
-        appearance_renderer = TexturedRenderer(bundle/manifest['asset'], manifest['object_id'], unlit=True, disable_multisampling=disable_multisampling)
-        appearance_settings = AppearanceSettings()
-        backend = AppearanceCheckedBackend(backend, appearance_renderer, appearance_settings)
-    initial = manifest['controlled_initial_pose'] if mode == 'controlled' else None
-    tracker = SequentialTracker(backend, initial_pose=initial)
-    from dataclasses import asdict
-    provenance = inference_provenance(bundle)
-    provenance['foundpose_bank_sha256'] = digest(CACHE/'banks'/f'{manifest["object"]}-foundpose.pt')
-    k = np.array(manifest['intrinsics']); output.parent.mkdir(parents=True, exist_ok=True)
-    initialization = None
-    if mode == 'complete':
-        setup_id = manifest['setup_frame_id']; record = mask_records[setup_id]
-        setup_mask = cv2.imread(str(masks_root/record['path']), cv2.IMREAD_GRAYSCALE)
-        setup_frame = Frame(setup_id, read_rgb(bundle, manifest, setup_id), k)
-        setup_segmentation = MaskPrediction(setup_id, setup_mask, record['mask_state'],
-            record.get('failure_reason'), record.get('timings_ms', {}))
-        if capture is not None:
-            capture.begin_frame(setup_frame, setup_mask, tracker.accepted is not None,
-                record.get('path'), digest(masks_root/record['path']), record['mask_state'], record.get('failure_reason'))
-        initialization = tracker.update(setup_frame, setup_segmentation)
-        if capture is not None:
-            capture.end_frame(initialization)
-    ids = manifest['frame_ids'][:limit]; frames = []
-    cap = cv2.VideoCapture(str(bundle/manifest['video'])); cap.set(cv2.CAP_PROP_POS_FRAMES, ids[0])
+    network = None; renderer = None
+    cap = None; capture = None; appearance_renderer = None
     try:
+        network = load_network(device)
+        network, head_identity = _load_inference_head(network, inference_context, device)
+        if inference_state is not None and head_identity is not None:
+            inference_state['identity'] = head_identity
+        renderer = _make_pose_renderer(bundle, manifest,
+            unlit_templates=unlit_templates,
+            disable_multisampling=disable_multisampling,
+            inference_context=inference_context)
+        bank = torch.load(CACHE/'banks'/f'{manifest["object"]}-foundpose.pt', map_location='cpu', weights_only=False)
+        capture = None
+        if capture_requested:
+            from .quality_mug_chronological_capture import ChronologicalCaptureBackend, MugChronologicalCapture
+            capture = MugChronologicalCapture(chronological_mug_capture_root,
+                chronological_mug_capture_branch, capture_trace, bundle=bundle, masks_root=masks_root)
+        refiner = _make_gotrack_refiner(network, renderer, manifest['object_id'], device,
+            pnp_settings, chronological_capture_callback=capture,
+            inference_context=inference_context)
+        backend = FoundPoseRecovery(refiner, bank, model_memory=model_memory)
+        if capture is not None:
+            backend = ChronologicalCaptureBackend(backend, refiner, capture)
+        appearance_renderer = None; appearance_settings = None
+        if appearance_check:
+            from .quality_appearance import AppearanceCheckedBackend, AppearanceSettings
+            appearance_renderer = TexturedRenderer(bundle/manifest['asset'], manifest['object_id'], unlit=True, disable_multisampling=disable_multisampling)
+            appearance_settings = AppearanceSettings()
+            backend = AppearanceCheckedBackend(backend, appearance_renderer, appearance_settings)
+        initial = manifest['controlled_initial_pose'] if mode == 'controlled' else None
+        profile_identity = None
+        if inference_context is not None:
+            profile_identity = _bind_inference_masks(inference_context,
+                head_identity or inference_context.identity_dict(), masks_root, mask_records)
+            if inference_state is not None:
+                inference_state['identity'] = profile_identity
+        ranking_kwargs = {}
+        if ranking_options is not None and ranking_options.active:
+            from .quality_pipeline import configure_ranking
+            ranker_provenance = inference_provenance(bundle)
+            if profile_identity is not None:
+                ranker_provenance['gotrack_inference'] = profile_identity
+            ranker, sink = configure_ranking(ranking_options, refiner=refiner,
+                manifest=manifest, provenance=ranker_provenance)
+            ranking_kwargs = dict(pose_ranker=ranker, candidate_sink=sink,
+                                  appearance_timing_source=refiner)
+        tracker = SequentialTracker(backend, initial_pose=initial, **ranking_kwargs)
+        from dataclasses import asdict
+        provenance = inference_provenance(bundle)
+        if profile_identity is not None:
+            provenance['gotrack_inference'] = profile_identity
+        if ranking_options is not None and ranking_options.active:
+            provenance['ranking'] = _ranking_provenance(ranking_options)
+        provenance['foundpose_bank_sha256'] = digest(CACHE/'banks'/f'{manifest["object"]}-foundpose.pt')
+        k = (inference_context.effective_intrinsics if inference_context is not None
+             else np.array(manifest['intrinsics']))
+        output = Path(output); output.parent.mkdir(parents=True, exist_ok=True)
+        initialization = None
+        if mode == 'complete':
+            setup_id = manifest['setup_frame_id']; record = mask_records[setup_id]
+            setup_mask = cv2.imread(str(masks_root/record['path']), cv2.IMREAD_GRAYSCALE)
+            setup_frame = Frame(setup_id, read_rgb(bundle, manifest, setup_id), k)
+            setup_segmentation = MaskPrediction(setup_id, setup_mask, record['mask_state'],
+                record.get('failure_reason'), record.get('timings_ms', {}))
+            if capture is not None:
+                capture.begin_frame(setup_frame, setup_mask, tracker.accepted is not None,
+                    record.get('path'), digest(masks_root/record['path']), record['mask_state'], record.get('failure_reason'))
+            initialization = tracker.update(setup_frame, setup_segmentation)
+            if profile_identity is not None:
+                initialization['gotrack_inference'] = _inference_frame_identity(
+                    profile_identity, record)
+            if capture is not None:
+                capture.end_frame(initialization)
+        ids = manifest['frame_ids'][:limit]; frames = []
+        cap = cv2.VideoCapture(str(bundle/manifest['video'])); cap.set(cv2.CAP_PROP_POS_FRAMES, ids[0])
         for i, fid in enumerate(ids):
             ok, bgr = cap.read()
             if not ok: raise ValueError('Incomplete source video')
@@ -2543,6 +2809,9 @@ def pose_stage(bundle, masks_root, output, device, mode, limit=None, forced_occl
                     segmentation.state, segmentation.reason)
             try: result = tracker.update(frame, segmentation)
             except (RuntimeError, ValueError, cv2.error) as e:
+                from .quality_pipeline import CandidateTraceError
+                if isinstance(e, CandidateTraceError):
+                    raise
                 if device == 'cuda' and ('out of memory' in str(e).lower() or 'cuda' in str(e).lower()):
                     raise RuntimeError('GPU execution failed; rerun this same stage on CPU: '+str(e)) from e
                 tracker.accepted = None; tracker.pending = None
@@ -2551,6 +2820,8 @@ def pose_stage(bundle, masks_root, output, device, mode, limit=None, forced_occl
             if capture is not None:
                 capture.end_frame(result)
             result['mask_path'] = record['path']; result['mask_sha256'] = mask_hash if capture is not None else digest(masks_root/record['path']); frames.append(result)
+            if profile_identity is not None:
+                result['gotrack_inference'] = _inference_frame_identity(profile_identity, record)
             save_result(output, dict(schema_version=1, mode=mode, object=manifest['object'], runtime=device_info(device),
                 frame_ids=ids, complete=len(frames) == len(manifest['frame_ids']), frames=frames,
                 provenance=provenance, tracking_settings={**asdict(tracker.settings), **pnp_settings,
@@ -2564,8 +2835,12 @@ def pose_stage(bundle, masks_root, output, device, mode, limit=None, forced_occl
                 stress_test=None if forced_occlusion is None else {'occlusion_start': forced_occlusion, 'source_frames': 15}))
             if i % 40 == 0: print(manifest['object'], mode, i+1, '/', len(ids), result['pose_state'], flush=True)
     finally:
-        cap.release(); renderer.close()
-        if appearance_renderer is not None: appearance_renderer.close()
+        if cap is not None: cap.release()
+        try:
+            if renderer is not None:
+                renderer.close()
+        finally:
+            if appearance_renderer is not None: appearance_renderer.close()
         if capture is not None:
             try:
                 capture.finish_branch(output)
@@ -2612,6 +2887,11 @@ def main():
     parser.add_argument('--masks', type=Path)
     parser.add_argument('--frame', type=int)
     parser.add_argument('--device', choices=['cpu', 'cuda'], default='cuda')
+    parser.add_argument('--ranker', choices=['legacy', 'deterministic', 'learned', 'confidence-research', 'ordering-research'], default='legacy')
+    parser.add_argument('--ranker-checkpoint', type=Path)
+    parser.add_argument('--candidate-trace', type=Path)
+    parser.add_argument('--ranker-patch-features', action='store_true',
+                        help='Cache frozen spatial encoder comparisons for ranking experiments')
     parser.add_argument('--mode', choices=['controlled', 'complete'], default='complete')
     parser.add_argument('--limit', type=int)
     parser.add_argument('--force-occlusion', type=int)
@@ -2626,10 +2906,74 @@ def main():
     parser.add_argument('--chronological-mug-capture-root', type=Path,
         help='Opt-in private V5 chronological observer root; prepared with quality_mug_chronological_capture prepare')
     parser.add_argument('--chronological-mug-capture-branch', choices=['control', 'candidate'])
+    parser.add_argument('--gotrack-head', type=Path,
+                        help='Cloud-only immutable GoTrack pose-head export')
+    parser.add_argument('--gotrack-head-sha256',
+                        help='Expected SHA-256 of --gotrack-head')
+    parser.add_argument('--gotrack-inference-config', type=Path,
+                        help='Reviewed GoTrack integer-geometry inference contract')
+    parser.add_argument('--gotrack-inference-config-sha256',
+                        help='Expected SHA-256 of --gotrack-inference-config')
+    parser.add_argument('--gotrack-runtime-compat-config', type=Path,
+                        help='Separately pinned runtime contract for a legacy request artifact')
+    parser.add_argument('--gotrack-runtime-compat-config-sha256',
+                        help='Expected SHA-256 of --gotrack-runtime-compat-config')
+    parser.add_argument('--cloud-execution', action='store_true',
+                        help='Assert this opt-in research run is in the approved cloud environment')
     args = parser.parse_args()
+    inference_options = None
+    inference_context = None
+    inference_state = None
+    if (args.gotrack_head is not None or args.gotrack_head_sha256 is not None or
+            args.gotrack_inference_config is not None or
+            args.gotrack_inference_config_sha256 is not None or
+            args.gotrack_runtime_compat_config is not None or
+            args.gotrack_runtime_compat_config_sha256 is not None or args.cloud_execution):
+        from .quality_gotrack_inference import options_from_values
+        try:
+            inference_options = options_from_values(
+                head_path=args.gotrack_head, head_sha256=args.gotrack_head_sha256,
+                config_path=args.gotrack_inference_config,
+                config_sha256=args.gotrack_inference_config_sha256,
+                compatibility_config_path=args.gotrack_runtime_compat_config,
+                compatibility_config_sha256=args.gotrack_runtime_compat_config_sha256,
+                cloud_execution=args.cloud_execution)
+        except (TypeError, ValueError) as exc:
+            parser.error(str(exc))
+        if args.stage != 'pose':
+            parser.error('GoTrack head/config options apply only to the pose stage')
+    from .quality_pipeline import RankingOptions
+    ranking_options = RankingOptions(args.ranker, args.ranker_checkpoint,
+                                     args.candidate_trace, args.ranker_patch_features)
+    if args.stage != 'pose' and (ranking_options.active or args.ranker_checkpoint is not None):
+        parser.error('Ranking options apply only to the pose stage')
+    ranking_options.validate()
     if args.stage == 'pose' and args.masks is None:
         parser.error('--masks is required for pose')
     manifest = read_input(args.bundle)
+    if inference_options is not None:
+        from .quality_gotrack_inference import prepare_inference
+        try:
+            inference_context = prepare_inference(inference_options, args.bundle, manifest)
+            _validate_inference_runner_options(inference_context,
+                mode=args.mode, forced_occlusion=args.force_occlusion,
+                model_memory=args.model_memory, unlit_templates=args.unlit_templates,
+                appearance_check=args.appearance_check,
+                disable_multisampling=args.disable_multisampling,
+                pnp_no_extrinsic_guess=args.pnp_no_extrinsic_guess,
+                chronological_mug_capture_root=args.chronological_mug_capture_root,
+                chronological_mug_capture_branch=args.chronological_mug_capture_branch)
+            if inference_context is not None:
+                if args.output.exists():
+                    raise ValueError('Configured GoTrack inference refuses to overwrite an existing pose output')
+                if args.candidate_trace is not None and args.candidate_trace.exists():
+                    raise ValueError('Configured GoTrack inference refuses to overwrite an existing candidate trace')
+                inference_state = {'identity': inference_context.identity_dict()}
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            if inference_context is not None and not args.output.exists():
+                _save_inference_failure(args.output, inference_context,
+                    None if inference_state is None else inference_state.get('identity'), exc)
+            parser.error(str(exc))
     if manifest.get('_capture') is not None:
         try:
             _validate_capture_stage_options(args, manifest)
@@ -2663,6 +3007,9 @@ def main():
         try:
             _pnp_tracking_settings(manifest['object'], True)
         except ValueError as e:
+            if inference_context is not None:
+                _save_inference_failure(args.output, inference_context,
+                    None if inference_state is None else inference_state.get('identity'), e)
             parser.error(str(e))
     if args.chronological_mug_capture_root is not None or args.chronological_mug_capture_branch is not None:
         if args.stage != 'pose': parser.error('Chronological mug capture is available only for the pose stage')
@@ -2686,13 +3033,16 @@ def main():
             parser.error('Physical detector priors are unsupported while association uses frame age')
     elif args.detection_prior is not None or args.prior_frame is not None:
         parser.error('--detection-prior and --prior-frame are available only for detect')
-    if is_physical and args.stage == 'segment':
-        parser.error('Physical mask generation requires the pending schema2 cache producer')
+    # quality_sam2.run owns the implemented schema-2 producer and its timing,
+    # source binding, cache coverage and physical-option preflight checks.
     physical_mask_cache = None
     if is_physical and args.stage == 'pose':
         try:
             _pnp_tracking_settings(manifest['object'], args.pnp_no_extrinsic_guess)
             physical_mask_cache = _physical_mask_cache(manifest, args.masks)
+            if inference_context is not None:
+                from .quality_gotrack_inference import validate_physical_mask_producer
+                validate_physical_mask_producer(inference_context, physical_mask_cache[0])
             if args.mode not in ('controlled', 'complete'):
                 raise ValueError('Pose mode must be controlled or complete')
             scored = manifest['_timing']['scored_keys']
@@ -2716,8 +3066,11 @@ def main():
             if args.force_occlusion is not None and args.force_occlusion not in manifest['frame_ids']:
                 raise ValueError('Physical forced-occlusion start must name a scored inference ordinal')
         except ValueError as e:
+            if inference_context is not None:
+                _save_inference_failure(args.output, inference_context,
+                    None if inference_state is None else inference_state.get('identity'), e)
             parser.error(str(e))
-    if args.stage == 'smoke' and not isinstance(manifest.get('controlled_initial_pose'), list):
+    if args.stage == 'smoke' and not is_physical and not isinstance(manifest.get('controlled_initial_pose'), list):
         parser.error('Setup smoke requires a declared controlled_initial_pose')
     cv2.setNumThreads(1)
     # Pyrender selects its hidden pyglet context when the variable is absent.
@@ -2779,7 +3132,11 @@ def main():
                    args.model_memory, args.unlit_templates, args.appearance_check, args.disable_multisampling,
                    args.pnp_no_extrinsic_guess,
                    chronological_mug_capture_root=args.chronological_mug_capture_root,
-                   chronological_mug_capture_branch=args.chronological_mug_capture_branch)
+                   chronological_mug_capture_branch=args.chronological_mug_capture_branch,
+                   ranking_options=ranking_options,
+                   inference_options=inference_options,
+                   inference_context=inference_context,
+                   inference_state=inference_state)
     if sum(p.stat().st_size for p in CACHE.rglob('*') if p.is_file()) > BUDGET: raise ValueError('8 GiB cache budget exceeded')
 
 

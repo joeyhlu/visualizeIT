@@ -1,0 +1,6 @@
+# Optional, cloud-only SAM training extras. Install only after explicit approval.
+-r requirements-adaptation.txt
+submitit==1.5.2
+tensorboard==2.17.1
+pycocotools==2.0.8
+tensordict==0.6.2

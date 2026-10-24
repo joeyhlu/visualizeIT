@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VisualizeIT video validation workbench (local)</title>
+  <link rel="stylesheet" href="/workbench.css">
+  <script src="/workbench.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Video validation workbench</h1>
+    <p class="note">Local research tool on 127.0.0.1. Not the phone app. No independent accuracy without human annotations.</p>
+    <div id="service-status" class="status" role="status" aria-live="polite">Loading service status…</div>
+  </header>
+
+  <main>
+    <section aria-labelledby="clips-h" class="panel">
+      <h2 id="clips-h">1. Choose or import a clip</h2>
+      <div class="row">
+        <label for="clip-select">Registered clip</label>
+        <select id="clip-select"></select>
+        <button id="clip-load" type="button">Open clip</button>
+      </div>
+      <details>
+        <summary>Import a small local video (≤ 250,000,000 bytes total)</summary>
+        <div class="row">
+          <label for="import-file">Video file</label>
+          <input id="import-file" type="file" accept="video/mp4,video/quicktime,video/webm,.m4v">
+        </div>
+        <div class="row">
+          <label for="import-clip-id">New clip id</label>
+          <input id="import-clip-id" type="text" pattern="[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}" placeholder="my-mug-01">
+        </div>
+        <div class="row">
+          <label for="import-k">Measured K (fx,fy,cx,cy)</label>
+          <input id="import-k" type="text" placeholder="leave empty to mark calibration unavailable">
+        </div>
+        <button id="import-go" type="button">Upload and register</button>
+        <p class="hint">Timing comes only from decoder timestamps; frames without reliable timestamps stay frame-indexed.</p>
+      </details>
+      <div id="clip-summary" class="summary"></div>
+      <div id="clip-control" class="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section aria-labelledby="select-h" class="panel" id="select-panel" hidden>
+      <h2 id="select-h">2. Select the object (reviewed prompt)</h2>
+      <div class="row">
+        <label for="key-start">Onboarding frames</label>
+        <select id="key-start" aria-label="First onboarding frame"></select>
+        <span>to</span>
+        <select id="key-end" aria-label="Last onboarding frame (selection frame)"></select>
+        <span id="key-count" class="hint"></span>
+      </div>
+      <div class="row" role="group" aria-label="Point label">
+        <button id="mode-pos" type="button" aria-pressed="true">Positive (P)</button>
+        <button id="mode-neg" type="button" aria-pressed="false">Negative (N)</button>
+        <button id="points-clear" type="button">Clear points</button>
+      </div>
+      <p class="hint">Click the image, or focus it and use arrow keys (Shift = 10 px) then Enter to add a point at the crosshair.
+        Coordinates are source pixels; the display letterbox is corrected.</p>
+      <div class="stage" id="select-stage" tabindex="0" aria-label="Selection frame. Arrow keys move the crosshair, Enter adds a point.">
+        <img id="select-img" alt="Selection frame">
+        <svg id="select-overlay" aria-hidden="true"></svg>
+      </div>
+      <ol id="points-list" class="points"></ol>
+      <div class="row">
+        <button id="selection-save" type="button">Save reviewed selection</button>
+        <button id="segment-go" type="button">Segment with SAM 2.1</button>
+        <label for="segment-count">frames</label>
+        <input id="segment-count" type="number" min="1" max="2000" value="10">
+      </div>
+      <div id="select-status" class="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section aria-labelledby="run-h" class="panel" id="run-panel" hidden>
+      <h2 id="run-h">3. Run</h2>
+      <div class="row">
+        <label for="run-mode">Mode</label>
+        <select id="run-mode">
+          <option value="smoke">smoke (first 10 scored frames)</option>
+          <option value="focused">focused</option>
+          <option value="regression">regression (all scored frames)</option>
+        </select>
+        <label for="run-first">First frame</label>
+        <select id="run-first"></select>
+        <label for="run-count">Count</label>
+        <input id="run-count" type="number" min="1" value="30">
+      </div>
+      <div class="row">
+        <label for="run-masks">Observed mask set</label>
+        <input id="run-masks" type="text" list="run-masks-list" placeholder="e.g. sam2-…">
+        <datalist id="run-masks-list"></datalist>
+        <label for="run-artwork">Test artwork</label>
+        <select id="run-artwork"><option>checkerboard</option><option>directional</option></select>
+      </div>
+      <p id="run-masks-note" class="hint"></p>
+      <fieldset class="row checks">
+        <legend>Roles to schedule</legend>
+        <label><input id="run-neural" type="checkbox" checked> Neural comparison: new head + frozen baseline (paired; needs a prepared or execution-only metric CAD control)</label>
+        <label><input id="run-relative" type="checkbox" checked> Automatic relative geometry (auxiliary experiment; not a new head)</label>
+      </fieldset>
+      <div class="row">
+        <button id="run-go" type="button">Create run and start job</button>
+        <button id="job-cancel" type="button" disabled>Cancel job</button>
+      </div>
+      <div id="job-status" class="status" role="status" aria-live="polite"></div>
+      <div class="row">
+        <label for="run-select">Previous runs</label>
+        <select id="run-select"></select>
+        <button id="run-open" type="button">Open run</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="view-h" class="panel" id="view-panel" hidden>
+      <h2 id="view-h">4. Inspect frames</h2>
+      <div class="row transport">
+        <button id="prev" type="button" aria-label="Previous frame">◀</button>
+        <button id="play" type="button" aria-pressed="false">Play</button>
+        <button id="next" type="button" aria-label="Next frame">▶</button>
+        <label for="frame-slider" class="sr-only">Frame</label>
+        <input id="frame-slider" type="range" min="0" value="0">
+        <span id="frame-label" class="mono"></span>
+      </div>
+      <p id="roles-context" class="roles-context" role="note"></p>
+      <div class="panes" id="panes">
+        <figure id="fig-original" data-role="source"><figcaption>Original</figcaption><div class="pane"><img id="pane-original" alt="Original frame"></div></figure>
+        <figure id="fig-mask" data-role="source"><figcaption>Observed mask</figcaption><div class="pane"><img id="pane-mask" alt="Observed mask" hidden><p id="pane-mask-note" class="pane-note"></p></div></figure>
+        <figure id="fig-relative" data-role="relative_geometry"><figcaption>Fixed artwork — relative geometry</figcaption><div class="pane"><img id="pane-art-base" alt=""><img id="pane-art" class="overlay" alt="Relative geometry artwork overlay" hidden><p id="pane-art-note" class="pane-note"></p></div></figure>
+        <figure id="fig-primary" data-role="primary_neural"><figcaption>Fixed artwork — new head (primary)</figcaption><div class="pane"><img id="pane-primary-base" alt=""><img id="pane-primary" class="overlay" alt="New head artwork overlay" hidden><p id="pane-primary-note" class="pane-note"></p></div></figure>
+        <figure id="fig-baseline" data-role="frozen_baseline"><figcaption>Fixed artwork — frozen baseline</figcaption><div class="pane"><img id="pane-baseline-base" alt=""><img id="pane-baseline" class="overlay" alt="Frozen baseline artwork overlay" hidden><p id="pane-baseline-note" class="pane-note"></p></div></figure>
+      </div>
+      <div class="neural-status" id="pane-neural" role="status" aria-live="polite" aria-label="Neural pose status for this frame"></div>
+      <table class="states" aria-label="Per-backend states for this frame">
+        <thead><tr><th scope="col">Backend</th><th scope="col">Mask</th><th scope="col">Pose</th><th scope="col">Render</th><th scope="col">Reason</th></tr></thead>
+        <tbody id="state-rows"></tbody>
+      </table>
+      <div class="row">
+        <label for="note-kind">Bookmark</label>
+        <select id="note-kind"><option>slip</option><option>flip</option><option>loss</option><option>recovery</option><option>note</option></select>
+        <input id="note-text" type="text" placeholder="optional note">
+        <button id="note-add" type="button">Add bookmark</button>
+      </div>
+      <ol id="bookmarks" class="bookmarks"></ol>
+      <h3>Evidence</h3>
+      <dl id="evidence" class="evidence"></dl>
+    </section>
+  </main>
+</body>
+</html>

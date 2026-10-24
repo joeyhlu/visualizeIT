@@ -1,0 +1,16 @@
+{
+  "seed": 42,
+  "epochs": 3,
+  "patience": 2,
+  "min_delta_iou": 0.001,
+  "learning_rate": 0.00001,
+  "train_frames": 2,
+  "max_sequences": 64,
+  "max_frames_per_sequence": 8,
+  "max_seconds": 900.0,
+  "max_total_seconds": 3600.0,
+  "max_checkpoint_bytes": 805306368,
+  "max_output_bytes": 3221225472,
+  "device": "cpu",
+  "amp": false
+}
