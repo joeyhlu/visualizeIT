@@ -1,0 +1,84 @@
+name: Native iPhone build (manual only)
+
+# No push, pull_request or scheduled trigger: device/build validation is deferred.
+on:
+  workflow_dispatch:
+    inputs:
+      approve_runner_usage:
+        description: 'Run this build now using GitHub macOS runner minutes'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ios-manual-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  simulator-build:
+    if: ${{ inputs.approve_runner_usage }}
+    runs-on: macos-15
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Record source and toolchain
+        run: |
+          mkdir -p build/native-ios
+          {
+            git rev-parse HEAD
+            xcodebuild -version
+            xcrun --sdk iphonesimulator --show-sdk-version
+          } | tee build/native-ios/toolchain.txt
+
+      - name: Compile unsigned simulator app
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project native-ios/VisualizeIT.xcodeproj \
+            -scheme VisualizeIT \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/native-ios/DerivedData \
+            -resultBundlePath build/native-ios/Build.xcresult \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            build 2>&1 | tee build/native-ios/build.log
+
+      - name: Package simulator app
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/native-ios/DerivedData/Build/Products/Debug-iphonesimulator/VisualizeIT.app \
+            build/native-ios/VisualizeIT-simulator.app.zip
+
+      - name: Preserve compile output
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-ios-source-build-${{ github.run_id }}
+          path: |
+            build/native-ios/toolchain.txt
+            build/native-ios/build.log
+            build/native-ios/Build.xcresult
+            build/native-ios/VisualizeIT-simulator.app.zip
+          retention-days: 3
+          if-no-files-found: warn
+
+      - name: Explain artifact scope
+        if: ${{ always() }}
+        run: |
+          {
+            echo '### Native iPhone source compilation'
+            echo 'This job compiles only; it does not run tests, launch the app or perform model inference.'
+            echo 'A simulator .app is not an installable iPhone IPA or TestFlight release.'
+            echo 'Exact visual parity, physical capture and live tracking remain unverified.'
+          } >> "$GITHUB_STEP_SUMMARY"
