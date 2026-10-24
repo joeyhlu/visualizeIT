@@ -30,6 +30,8 @@ Open the report's path under `http://127.0.0.1:8876/`. A source-level geometry a
 
 ## Mobile and server status
 
+`native-ios/` contains the new native SwiftUI iPhone application and Xcode project, with AVFoundation camera capture, glass design screens and an authenticated client for the pinned GoTrack pose bridge. It does not embed a website. Open [the iPhone setup guide](native-ios/README.md) for installation from a Mac. This is source delivery: no signed app, iOS build, exact visual comparison or physical-phone tracking validation has been completed. See [native mobile status](docs/native-mobile.md) and [native pose contract](docs/native-pose-contract.md) for the required runtime, geometry and admission configuration.
+
 `mobile/` contains a Unity fixture-app scaffold. Unity 6 import, platform compilation, camera AR, and physical-device behavior have not been verified; no installable phone build is available. Unity setup remains deferred. When resumed, the editor bootstrap exposes **VisualizeIt → Build Android APK** and **VisualizeIt → Export iOS project**. These entry points still require the supported Unity editor and platform modules, and their builds need validation. See [device validation](docs/validation.md) and [observed status](docs/status.md).
 
 `server/` contains the reconstruction milestone specification only. There is no implemented or deployed server or model worker. See [server scope](server/README.md).
@@ -40,6 +42,7 @@ Open the report's path under `http://127.0.0.1:8876/`. A source-level geometry a
 |---|---|
 | `bench/` | Synthetic surface and camera experiments, scanned-object mapping, and offline recorded-footage tracking research |
 | `mobile/` | Deferred Unity source scaffold for fixture placement and design previews |
+| `native-ios/` | Native SwiftUI iPhone UI, camera and trained-pose service client; build/device validation pending |
 | `native/` | C++ coordinate-conversion boundary; no moving-object tracker |
 | `server/` | Reconstruction service specification; no implementation |
 | `reference/` | Original hackathon source retained as a pinned reference; see its [README](reference/README.md) |

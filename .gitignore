@@ -24,6 +24,10 @@ _pycache_
 *.pyo
 .venv/
 .venv-cloud/
+native-ios/build/
+native-ios/DerivedData/
+native-ios/**/xcuserdata/
+native-ios/**/*.xcuserstate
 venv/
 .pytest_cache/
 .mypy_cache/
