@@ -1,0 +1,12 @@
+{
+  "full_dataset_objects": 12,
+  "full_scored_object_frames": 3600,
+  "profiles": {
+    "full": 300,
+    "long": 110,
+    "pilot": 30,
+    "smoke": 10
+  },
+  "rule": "Ordered source10 onward, source9 is the only onboarding frame; subset choice never uses scored labels",
+  "schema": "offline_sam_pose_profiles_v1"
+}

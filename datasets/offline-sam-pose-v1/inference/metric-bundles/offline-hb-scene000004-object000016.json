@@ -1,0 +1,37 @@
+{
+  "family": "offline_hb_640x480",
+  "glb_path": "models/obj_000016.glb",
+  "glb_sha256": "a4284e13d1bd94b410d6fae829aad95f5ba000be132ed123ebff3628fecb3105",
+  "metric_provenance": "dataset_metric_cad",
+  "obj_id": 16,
+  "principal_point_origin": "integer_centers",
+  "schema": "workbench_metric_bundle_v1",
+  "seed_frame_id": "f000009",
+  "seed_label": "onboarding:original HB frame9 authorized one-shot known pose; no reuse after loss",
+  "seed_pose_m": [
+    [
+      -0.1378092,
+      -0.9895884,
+      0.04151587,
+      0.028409385004208403
+    ],
+    [
+      -0.6628736,
+      0.0610044,
+      -0.7462422,
+      0.10931463614302998
+    ],
+    [
+      0.7359397,
+      -0.130359,
+      -0.6643796,
+      0.709079203264677
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ]
+}

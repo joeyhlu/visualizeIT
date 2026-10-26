@@ -1,0 +1,13 @@
+{
+  "bytes": 37048249,
+  "existing_full_real_media_release": "https://github.com/joeyhlu/visualizeIT/releases/tag/tracking-dataset-v1",
+  "filename": "offline-sam-pose-v1-metric-assets.tar.gz",
+  "manifest_sha256": "a03f975bc11afe600d249e9769de8e27c5ec3c2e872c2bac469d91ac47496aba",
+  "models": 12,
+  "private_weights_included": false,
+  "publication_status": "prepared_locally_not_uploaded",
+  "raw_RGB_duplicated": false,
+  "schema": "offline_sam_pose_release_asset_v1",
+  "scored_object_frames": 3600,
+  "sha256": "3efd7304c32f2fd1d468fd3ce419c65f05303c459742acc51e9ca59194e0432a"
+}
