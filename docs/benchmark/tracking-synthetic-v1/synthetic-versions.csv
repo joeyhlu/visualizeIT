@@ -1,0 +1,4 @@
+system,label,visible_reprojection_coverage_percent,visible_public_pose_availability_percent,all_frame_public_pose_availability_percent,update_fps,offline_replay_fps,initialization_failure_sequences,unique_scored_frames,timed_unique_frames,skipped_unique_frames
+original_rigid,Original rigid (df788084),78.8583509513742,80.17383133662204,76.57894736842105,40.963236537529006,38.8823964187625,3,4560,3990,570
+current_rigid,Current rigid,78.29457364341084,78.95231383603478,75.5482456140351,35.64434557042185,34.01498897627333,3,4560,3990,570
+current_prototype,Current stream wrapper,76.83814893117219,77.42541696030068,74.12280701754386,33.36216438781719,31.91925454198219,3,4560,3990,570

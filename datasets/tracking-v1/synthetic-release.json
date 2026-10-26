@@ -1,0 +1,13 @@
+{
+  "archiveName": "visualizeit-synthetic-tracking-v1.tar.gz",
+  "sha256": "97b366af638787eb50ba32304f9d6f1ef35187490a2260e4dc25a0b0517e1b83",
+  "bytes": 166926672,
+  "status": "published_github_prerelease",
+  "verifiedResources": 14424,
+  "sequences": 24,
+  "scoredFrames": 4560,
+  "scope": "Full synthetic RGB/depth/mask media, models, manifests, README and CC0 license; verified GitHub research prerelease asset, not large Git history blobs.",
+  "releaseURL": "https://github.com/joeyhlu/visualizeIT/releases/tag/tracking-dataset-v1",
+  "downloadURL": "https://github.com/joeyhlu/visualizeIT/releases/download/tracking-dataset-v1/visualizeit-synthetic-tracking-v1.tar.gz",
+  "githubDigest": "sha256:97b366af638787eb50ba32304f9d6f1ef35187490a2260e4dc25a0b0517e1b83"
+}

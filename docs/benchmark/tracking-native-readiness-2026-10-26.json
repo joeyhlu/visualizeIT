@@ -1,0 +1,29 @@
+{
+  "capabilities": {
+    "schema_version": 1,
+    "model_head": "27e06a513713232f4ae542d50b8364a3bb319669451448e694bcd335a3fb9311",
+    "installed_head_sha256": null,
+    "admission_ready": false,
+    "live_camera_supported": false,
+    "recorded_finite_supported": true,
+    "blockers": [
+      "no reviewed live GoTrack operator configuration",
+      "runtime/live admission pending"
+    ],
+    "limits": {
+      "max_width": 1920,
+      "max_height": 1920,
+      "max_pixels": 2073600,
+      "max_jpeg_bytes": 4194304,
+      "max_body_bytes": 6291456,
+      "max_sessions": 1,
+      "max_inflight": 1
+    }
+  },
+  "torchInstalled": false,
+  "nvidiaSmiPresent": false,
+  "downloadedWeights": [],
+  "scope": "Read-only readiness probe; no model load, network listener or phone upload",
+  "probePhase": "initial_unconfigured_geometric_venv_before_isolated_private_model_restore",
+  "followupEvidence": "tracking-neural-cpu-v1/summary.json validates later isolated CPU model execution; full workbench serving admission remains separate"
+}

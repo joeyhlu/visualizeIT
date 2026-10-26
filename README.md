@@ -6,6 +6,22 @@ Tracking and mapping results are experimental. Independent accuracy, broader obj
 
 An initialized geometric tracking prototype includes a local frame-processing service, a browser camera client, and frozen dataset-reference evaluations. See [prototype launch and evidence](docs/prototype.md). The ten-object run completed with zero quality passes. A later tracker repair passes synthetic controls; independent human accuracy, sustained live 30 FPS and physical-phone validation remain unmet.
 
+## CPU tracking regression benchmark
+
+The first full comparison uses **shared simplified initialization**, not the
+full production pipeline. Original mesh-raycast initialization is being checked
+separately; do not infer production readiness or failure solely from that first
+comparison.
+
+A portable CPU-only harness compares the exact historical rigid tracker with
+the current rigid tracker and production stream wrapper on variable-length
+sequences. The versioned dataset has 3,600 real HB reference-labeled scored
+object-frames and 4,560 explicitly synthetic stress frames, with isolated
+evaluation labels and repeatable setup. See [dataset, licenses and reproduction](datasets/tracking-v1/README.md).
+These geometric measurements do not stand in for trained GoTrack or live-phone
+performance. Full-media archive publication and measured results are recorded
+separately rather than implied by the presence of a download recipe.
+
 ## Run the offline tools
 
 The synthetic camera bench renders the fixture meshes and measures mapping behavior with known camera poses. It does not estimate poses or represent phone performance. Use Python 3.12 with the pinned packages in `bench/requirements.txt`. The wrapper also exports the C# meshes using the standalone compiler bundled with an installed Unity Editor; this geometry export does not build the phone app. Set `-UnityEditorRoot` if the editor is outside the wrapper's default path:

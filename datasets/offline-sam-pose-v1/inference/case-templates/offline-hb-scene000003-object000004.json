@@ -1,0 +1,62 @@
+{
+  "cases": [
+    {
+      "K": [
+        537.4799,
+        0.0,
+        318.8965,
+        0.0,
+        536.1447,
+        238.3781,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "case_id": "offline-hb-scene000003-object000004-f000009",
+      "family": "offline_hb_640x480",
+      "glb_path": "models/obj_000004.glb",
+      "glb_sha256": "daf664c7efe0fc93db754279b7de147171bad8538937176323a1d78b4d5b1901",
+      "initial_pose_m": [
+        [
+          -0.02265114,
+          -0.997774,
+          0.06271695,
+          0.010324518378445205
+        ],
+        [
+          -0.6529241,
+          -0.03274231,
+          -0.7567152,
+          0.10060480917807889
+        ],
+        [
+          0.7570842,
+          -0.05809,
+          -0.6507289,
+          0.6715292989965265
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "initialization_source": "onboarding:original frame9 single known pose",
+      "mask_path": null,
+      "mask_sha256": null,
+      "metric_provenance": "dataset_metric_cad",
+      "obj_id": 4,
+      "principal_point_origin": "integer_centers",
+      "rgb_path": "rgb/scene000003/000009.png",
+      "rgb_sha256": "49c244f4af8882a15e3bb47ea4ba5f64b3da8b0d61a13a13a8337b10a3fc5232",
+      "segmentation": {
+        "manifest_sha256": null,
+        "producer": "PENDING actual observed SAM2 output"
+      }
+    }
+  ],
+  "instruction": "Do not use annotation masks here. After actual native SAM segmentation, run native gate case on f000009 to bind its observed mask/producer manifest.",
+  "schema": "offline_sam_observed_case_template_v1",
+  "status": "blocked_until_actual_SAM_mask"
+}

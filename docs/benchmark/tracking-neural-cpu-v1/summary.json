@@ -1,0 +1,274 @@
+{
+  "schemaVersion": 1,
+  "status": "completed_diagnostic_not_quality_admission",
+  "dateUTC": "2026-10-26",
+  "sourceCommitBeforeRestoration": "f58d532bebd8700c07fc3f529b18bd646bd14a73",
+  "adapterSHA256": "b1ff6f3face4ff06afa7f75c1f2dac59f933306c2168299ab371fbde3a2c0789",
+  "sourceClosureSHA256": "ef28ee7d7b8ade1a7bf103a2a245884a73782f7df0ba7f4436f8edb0779228ae",
+  "inputPlanSHA256": "7859e51e28c6327e63924982357234b5dc57abcefab2b0d5bf679c7c86fd3fe3",
+  "localResultsSHA256": "87af6f5ff0d3421aff2b2e5cbeb705a35a7f4b0113578b811a04400396930bbc",
+  "localFreezeSHA256": "4ba6bfab3bf19834dd30a1c06b81ec7ee2cbb7a0bf372e515eb2187d472b25bf",
+  "localSupervisionSHA256": "1a66af713b6f51cf619bf019eb826b9aa21e2edd969e929e4d878602ba4c81b3",
+  "inferenceManifestSHA256": "1bdc84f5865797c308c2a46dad67c90f532ecb3e963ac5713b80acd820831af4",
+  "dataset": "BOP HB val_primesense",
+  "objectId": 20,
+  "uniqueAuthorizedOnboardingQueryFrames": 2,
+  "newScoredBenchmarkFrames": 0,
+  "queryFrameIds": [
+    8,
+    9
+  ],
+  "previousAuthorizedSeedFrameIds": [
+    7,
+    8
+  ],
+  "maskSource": "authorized BOP onboarding visible-mask annotations; not automatic segmentation",
+  "runtime": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+    "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+    "packages": {
+      "torch": "2.5.1+cpu",
+      "torchvision": "0.20.1+cpu",
+      "numpy": "1.26.4",
+      "Pillow": "10.4.0",
+      "opencv-python-headless": "4.10.0.84",
+      "pyrender": "0.1.45",
+      "trimesh": "4.4.9",
+      "PyOpenGL": "3.1.0"
+    }
+  },
+  "actualTorchThreads": 1,
+  "weightsOnlyDeserialization": true,
+  "gpuUsed": false,
+  "trainingSteps": 0,
+  "workbenchAdmissionGranted": false,
+  "fullNetworkExecuted": true,
+  "referenceExportParity": true,
+  "networkForwards": 30,
+  "supervision": {
+    "exitCode": 0,
+    "killedReason": null,
+    "peakSampledRSSBytes": 3147182080,
+    "elapsedSeconds": 147.76907530000062,
+    "maxSeconds": 900.0,
+    "maxRSSBytes": 7516192768,
+    "rssSamplingSeconds": 0.25,
+    "gpuUsed": false,
+    "trainingSteps": 0
+  },
+  "variants": {
+    "reference_best": {
+      "provenance": {
+        "role": "reference_best",
+        "baseSHA256": "f7d127abe2b8e37b1322a19115343286a6560700c6e02fc6080b4e2426a01086",
+        "referenceSHA256": "0c211531ffdee325e6504411f9dee07c83cc242cd8d048c115548aed6de2fa3b",
+        "installedHeadStateSHA256": "a3c1e45a61f7819aa841ad0ae3d41c70945f1c360f5ff9c072d3da87c1966dd8"
+      },
+      "moduleForwardCounts": {
+        "backbone": 10,
+        "decoder": 10,
+        "pose_head": 10
+      },
+      "cases": [
+        {
+          "caseId": "authorized-onboarding-8",
+          "networkForwards": 5,
+          "returnedPoseCandidate": true,
+          "retainedCorrespondences": 17527,
+          "refinementSecondsIncludingCapture": 22.434088389000863,
+          "error": null,
+          "poseMatrixSHA256": "c03346935da428f3ba76381020f2e79289075b706eea1cc23bbe567046b52ed4"
+        },
+        {
+          "caseId": "authorized-onboarding-9",
+          "networkForwards": 5,
+          "returnedPoseCandidate": true,
+          "retainedCorrespondences": 17513,
+          "refinementSecondsIncludingCapture": 21.071999753000455,
+          "error": null,
+          "poseMatrixSHA256": "10a73a75d8670fa195103bde6daf987fbc2523fdd454496acc39d5ad1e0d148c"
+        }
+      ],
+      "totalSecondsIncludingLoadAndCapture": 50.57135785999981,
+      "networkForwardMedianSeconds": 4.124549400999513,
+      "networkForwardTotalSeconds": 41.46272206499998
+    },
+    "adapted_export": {
+      "provenance": {
+        "role": "adapted_export",
+        "baseSHA256": "f7d127abe2b8e37b1322a19115343286a6560700c6e02fc6080b4e2426a01086",
+        "artifact_id": "flow-terminal-20261021-final285",
+        "artifact_manifest_sha256": "05fe3012a18c2ed2669bcf2690e0b48650d9472fc1bffdf0980b1a253e6fc770",
+        "head": {
+          "requested_sha256": "27e06a513713232f4ae542d50b8364a3bb319669451448e694bcd335a3fb9311",
+          "installed_sha256": "27e06a513713232f4ae542d50b8364a3bb319669451448e694bcd335a3fb9311"
+        },
+        "quality_claim": false,
+        "geometry_admission": false,
+        "head_installation": {
+          "requested": true,
+          "installed": true
+        },
+        "installedHeadStateSHA256": "a3c1e45a61f7819aa841ad0ae3d41c70945f1c360f5ff9c072d3da87c1966dd8"
+      },
+      "moduleForwardCounts": {
+        "backbone": 10,
+        "decoder": 10,
+        "pose_head": 10
+      },
+      "cases": [
+        {
+          "caseId": "authorized-onboarding-8",
+          "networkForwards": 5,
+          "returnedPoseCandidate": true,
+          "retainedCorrespondences": 17527,
+          "refinementSecondsIncludingCapture": 21.414868301999377,
+          "error": null,
+          "poseMatrixSHA256": "c03346935da428f3ba76381020f2e79289075b706eea1cc23bbe567046b52ed4"
+        },
+        {
+          "caseId": "authorized-onboarding-9",
+          "networkForwards": 5,
+          "returnedPoseCandidate": true,
+          "retainedCorrespondences": 17513,
+          "refinementSecondsIncludingCapture": 20.737500125000224,
+          "error": null,
+          "poseMatrixSHA256": "10a73a75d8670fa195103bde6daf987fbc2523fdd454496acc39d5ad1e0d148c"
+        }
+      ],
+      "totalSecondsIncludingLoadAndCapture": 45.9164537430006,
+      "networkForwardMedianSeconds": 4.021532643499995,
+      "networkForwardTotalSeconds": 40.38963808900189
+    },
+    "frozen_baseline": {
+      "provenance": {
+        "role": "frozen_baseline",
+        "baseSHA256": "f7d127abe2b8e37b1322a19115343286a6560700c6e02fc6080b4e2426a01086",
+        "installedHeadStateSHA256": "c9e77350048943092f68b01a5439c526453da20e85cef23ed3fb85b09803efd6"
+      },
+      "moduleForwardCounts": {
+        "backbone": 10,
+        "decoder": 10,
+        "pose_head": 10
+      },
+      "cases": [
+        {
+          "caseId": "authorized-onboarding-8",
+          "networkForwards": 5,
+          "returnedPoseCandidate": true,
+          "retainedCorrespondences": 17508,
+          "refinementSecondsIncludingCapture": 22.57643994799946,
+          "error": null,
+          "poseMatrixSHA256": "99b2cd3640d180fd9a43dd0e1dbe52bcd0d5fb2176e88b33bacc9cf440510a0e"
+        },
+        {
+          "caseId": "authorized-onboarding-9",
+          "networkForwards": 5,
+          "returnedPoseCandidate": true,
+          "retainedCorrespondences": 17538,
+          "refinementSecondsIncludingCapture": 20.6518510599999,
+          "error": null,
+          "poseMatrixSHA256": "fec26aa70e266a4afc31c2e234fad81fe723da377ffc285fd62e79c930dccae3"
+        }
+      ],
+      "totalSecondsIncludingLoadAndCapture": 46.548111846999745,
+      "networkForwardMedianSeconds": 4.130816486499498,
+      "networkForwardTotalSeconds": 41.389433850001296
+    }
+  },
+  "comparisons": [
+    {
+      "caseId": "authorized-onboarding-8",
+      "referenceExportParity": true,
+      "allComparedShapesAndDtypesEqual": true,
+      "referenceExportMaxAbsDifference": 0.0,
+      "referenceExportPoseEqual": true,
+      "frozenBaselineVsAdaptedFirstIteration": {
+        "firstInputsByteEqual": true,
+        "firstFlowMaxAbsDifference": 0.2395176887512207,
+        "firstConfidenceMaxAbsDifference": 0.0
+      }
+    },
+    {
+      "caseId": "authorized-onboarding-9",
+      "referenceExportParity": true,
+      "allComparedShapesAndDtypesEqual": true,
+      "referenceExportMaxAbsDifference": 0.0,
+      "referenceExportPoseEqual": true,
+      "frozenBaselineVsAdaptedFirstIteration": {
+        "firstInputsByteEqual": true,
+        "firstFlowMaxAbsDifference": 0.19659709930419922,
+        "firstConfidenceMaxAbsDifference": 0.0
+      }
+    }
+  ],
+  "tensorShapesAndDtypes": {
+    "query": {
+      "shape": [
+        1,
+        3,
+        280,
+        280
+      ],
+      "dtype": "<f4"
+    },
+    "template": {
+      "shape": [
+        1,
+        3,
+        280,
+        280
+      ],
+      "dtype": "<f4"
+    },
+    "rendered_mask": {
+      "shape": [
+        1,
+        280,
+        280
+      ],
+      "dtype": "|b1"
+    },
+    "flow": {
+      "shape": [
+        1,
+        2,
+        280,
+        280
+      ],
+      "dtype": "<f4"
+    },
+    "confidence": {
+      "shape": [
+        1,
+        280,
+        280
+      ],
+      "dtype": "<f4"
+    }
+  },
+  "caveats": [
+    "Two already-authorized onboarding images, not held-out evaluation",
+    "Known prior-frame poses and annotation masks; no automatic discovery/segmentation",
+    "Same-input independent refinement, not causal video tracking or reacquisition",
+    "Legacy geometry is not workbench_integer_metric_v1 serving admission",
+    "Instrumentation and software rendering timings are not live FPS",
+    "Single bounded diagnostic, no repeated neural speed benchmark or pose accuracy improvement claim",
+    "Full workbench still requires the exact historical small-records file and genuinely earned contract/geometry/parity admission; historical backup/loader receipts are additional diagnostics, not hard admission gates",
+    "Source/data hashes bind measured files; the input-plan hash includes local paths and is not a cross-machine path-independent identifier"
+  ],
+  "sameVMHardware": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+    "numpy": "2.3.5",
+    "opencv": "4.13.0",
+    "pillow": "12.3.0",
+    "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+    "cpuModel": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCPUs": 9,
+    "memoryTotal": "10206484 kB",
+    "opencvThreads": 1,
+    "gpuUsed": false,
+    "note": "Shared CPU VM; elapsed time is environment-specific, not live-phone FPS"
+  },
+  "hardwareObservationNote": "Same cloud VM used for the geometric benchmark; model timing is a separate instrumented diagnostic and not directly compared to geometric FPS."
+}

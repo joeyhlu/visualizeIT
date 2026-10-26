@@ -1,0 +1,15 @@
+{
+  "disclosure": "AI review of annotation-assisted points on authorized original frame9 only; not user taps or independent human labels",
+  "proposalsSHA256": "04d1f0b1b1b43d5e16cb141426ac828803f11c2aadd17687130d5ecc5f210f1b",
+  "schema": "offline_hb_prompt_review_v1",
+  "sheets": [
+    {
+      "path": "onboarding-review/prompt-review-01.png",
+      "sha256": "275f37a9538d9680832e151a68ba2627918769168b0081e5474793d1a62af0e6"
+    },
+    {
+      "path": "onboarding-review/prompt-review-02.png",
+      "sha256": "d7a4499cccf5ece5dfc5d9856ba8ae29185d4119843eb894d0241be4e758dc51"
+    }
+  ]
+}

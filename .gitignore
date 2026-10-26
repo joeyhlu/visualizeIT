@@ -47,3 +47,6 @@ venv/
 *.pth
 *.onnx
 *.safetensors
+
+# CPU tracking benchmark virtualenv
+.venv-benchmark/

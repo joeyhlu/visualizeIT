@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "benchmarkId": "visualizeit-hb-tracking-v1",
+  "dataset": "BOP HB val_primesense",
+  "evidenceKind": "real_dataset_reference",
+  "inferenceSHA256": "1bdc84f5865797c308c2a46dad67c90f532ecb3e963ac5713b80acd820831af4",
+  "evaluatorSHA256": "1fc8fe971bf000c244b35d8416d473684f826fe756ae91dea2e2a41b861d9956",
+  "sourceHashes": {
+    "bench/tracking_benchmark.py": "459fa255ebbc6169b1063ae1e60501692d3bd3cd75c7f26c17f6f91a025a8172",
+    "bench/tracker.py": "0166837ebb2398cc0b84fa011493578c6a02d0c95ff0e972efe0be91b2a2922c",
+    "bench/prototype_tracking.py": "af6851397558c3c099681707f75750bfb0795756196e7ea10b9233bcc9afb66c",
+    "bench/vision.py": "76c7e91e6fe73278b35f96cd933801d8cca299aec41d51276bfe95c0167f77da",
+    "bench/prototype_benchmark.py": "5f0f7e0bfc91971419120b320f1d2cc228a26affa92cdbbb352dbe479f7fe3b7",
+    "bench/ply_model.py": "d939dfc1998f89938434b65b733572105d42e6f7a66a78db96d193e854f103b8",
+    "bench/renderer.py": "586718f74d0de7da736fd123a88f16e3d5e920ac233beee66f4c692af9ae363f",
+    "bench/model.py": "8a48c97618af3beb9123742e64a3a06b1a1d9631c305160eac0b672d5acc6ca7",
+    "bench/obj_model.py": "87e481c458d72d0d3ae44e0f58df5cf3b7a2476f4e1846a4552f83b4ca342705",
+    "bench/tracking_production_banks.py": "f541af57fe4aac92eb8d7b1ac16b4ccabc9e31904a9262947905e9c151f4de9a"
+  },
+  "historicalCommit": "df788084e1e0eb79950fe81cf87b603044c1a2d5",
+  "historicalTrackerSHA256": "0d619def904edaf68ffb35e2bedee45b1dcafdb3d2053a4af59be7d40a5d89d1",
+  "hardware": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+    "numpy": "2.3.5",
+    "opencv": "4.13.0",
+    "pillow": "12.3.0",
+    "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+    "cpuModel": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCPUs": 9,
+    "memoryTotal": "10206484 kB",
+    "opencvThreads": 1,
+    "gpuUsed": false,
+    "note": "Shared CPU VM; elapsed time is environment-specific, not live-phone FPS"
+  },
+  "configuration": {
+    "systems": [
+      "original_rigid",
+      "current_rigid",
+      "current_prototype"
+    ],
+    "repeats": 1,
+    "warmupFrames": 20,
+    "initializationMode": "production_mesh",
+    "initialization": "ten annotated RGB-D/pose frames; exact production prototype_benchmark.build_bank mesh-ray intersections; ORB nfeatures=2000 per view, no extra cap",
+    "runtime": "serial systems and sequences; OpenCV one thread; no detector/neural fallback",
+    "thresholds": {
+      "accurateReprojectionPixels": 5.0,
+      "visibleFraction": 0.5,
+      "addFractionOfSampledBoundingBoxDiagonal": 0.1
+    },
+    "limitSequences": null,
+    "maxScoredFrames": null,
+    "bankCacheEnabled": true,
+    "bankCachePolicy": "Hash-bound exact production builder outputs; preparation does not overlap measured tracker timing; original build seconds recorded separately"
+  },
+  "evaluatorOpenedDuringInference": false
+}

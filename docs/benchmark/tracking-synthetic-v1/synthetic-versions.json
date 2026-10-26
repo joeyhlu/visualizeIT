@@ -1,0 +1,41 @@
+[
+  {
+    "system": "original_rigid",
+    "label": "Original rigid (df788084)",
+    "visible_reprojection_coverage_percent": 78.8583509513742,
+    "visible_public_pose_availability_percent": 80.17383133662204,
+    "all_frame_public_pose_availability_percent": 76.57894736842105,
+    "update_fps": 40.963236537529006,
+    "offline_replay_fps": 38.8823964187625,
+    "initialization_failure_sequences": 3,
+    "unique_scored_frames": 4560,
+    "timed_unique_frames": 3990,
+    "skipped_unique_frames": 570
+  },
+  {
+    "system": "current_rigid",
+    "label": "Current rigid",
+    "visible_reprojection_coverage_percent": 78.29457364341084,
+    "visible_public_pose_availability_percent": 78.95231383603478,
+    "all_frame_public_pose_availability_percent": 75.5482456140351,
+    "update_fps": 35.64434557042185,
+    "offline_replay_fps": 34.01498897627333,
+    "initialization_failure_sequences": 3,
+    "unique_scored_frames": 4560,
+    "timed_unique_frames": 3990,
+    "skipped_unique_frames": 570
+  },
+  {
+    "system": "current_prototype",
+    "label": "Current stream wrapper",
+    "visible_reprojection_coverage_percent": 76.83814893117219,
+    "visible_public_pose_availability_percent": 77.42541696030068,
+    "all_frame_public_pose_availability_percent": 74.12280701754386,
+    "update_fps": 33.36216438781719,
+    "offline_replay_fps": 31.91925454198219,
+    "initialization_failure_sequences": 3,
+    "unique_scored_frames": 4560,
+    "timed_unique_frames": 3990,
+    "skipped_unique_frames": 570
+  }
+]

@@ -1,0 +1,132 @@
+{
+  "evidenceKind": "original_dataset_reference_metadata",
+  "inferenceSHA256": "1bdc84f5865797c308c2a46dad67c90f532ecb3e963ac5713b80acd820831af4",
+  "realObjects": 12,
+  "scenes": 4,
+  "schemaVersion": 1,
+  "scoredObjectFrames": 3600,
+  "sequences": [
+    {
+      "medianVisibleFraction": 0.9818203312445309,
+      "minimumVisibleFraction": 0.5586537107449655,
+      "modelSHA256": "acc8df19d3b4cc79fcd57c3810a793739b8c970e7889959f3dca4cde35032898",
+      "objectId": 20,
+      "sceneId": "000001",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 132.95802027783247,
+      "visibleFractionAtLeastHalfFrames": 300
+    },
+    {
+      "medianVisibleFraction": 0.9784128679626998,
+      "minimumVisibleFraction": 0.7694008052419673,
+      "modelSHA256": "9e28c594b48266b2081bf709be6b6929e6a3c92a7df32f41122770b3dc90a27f",
+      "objectId": 28,
+      "sceneId": "000001",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 132.4203237878427,
+      "visibleFractionAtLeastHalfFrames": 300
+    },
+    {
+      "medianVisibleFraction": 0.9813766335457661,
+      "minimumVisibleFraction": 0.4413059427732942,
+      "modelSHA256": "56892e38cdaeda94135b68b794b16272343ef7524c8d268d9578952b4a842c2a",
+      "objectId": 33,
+      "sceneId": "000001",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 130.24548842596806,
+      "visibleFractionAtLeastHalfFrames": 291
+    },
+    {
+      "medianVisibleFraction": 0.9513969543794247,
+      "minimumVisibleFraction": 0.5726022504018575,
+      "modelSHA256": "7b45a15d30713c922ec4ded917df41c9f22133edff45cba4032eff053c7f364a",
+      "objectId": 2,
+      "sceneId": "000002",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 134.9244815194017,
+      "visibleFractionAtLeastHalfFrames": 300
+    },
+    {
+      "medianVisibleFraction": 0.9907137446604097,
+      "minimumVisibleFraction": 0.736762251555151,
+      "modelSHA256": "0698e80c5739eb52667856165f161199f38cf96feddaccccbdf3516610ab4f39",
+      "objectId": 7,
+      "sceneId": "000002",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 132.85731155432865,
+      "visibleFractionAtLeastHalfFrames": 300
+    },
+    {
+      "medianVisibleFraction": 0.9745559138746098,
+      "minimumVisibleFraction": 0.4311009817671809,
+      "modelSHA256": "4e3be5487b2c11ea92ca2881a8fbbb6a0478a491534e89a093ff6454242d95cc",
+      "objectId": 21,
+      "sceneId": "000002",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 130.88523324122863,
+      "visibleFractionAtLeastHalfFrames": 294
+    },
+    {
+      "medianVisibleFraction": 0.9778665906384899,
+      "minimumVisibleFraction": 0.1009421265141319,
+      "modelSHA256": "eb371addc964798a5cf793e662c89eefc85f8018e08d2345ef946932d9a3c01e",
+      "objectId": 4,
+      "sceneId": "000003",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 123.0660372587651,
+      "visibleFractionAtLeastHalfFrames": 290
+    },
+    {
+      "medianVisibleFraction": 0.96995222920542,
+      "minimumVisibleFraction": 0.18471337579617833,
+      "modelSHA256": "d58cae48d84361b7d8392101b4da5bc7cc11ad4471bb1bf929a3baff55e4d28a",
+      "objectId": 9,
+      "sceneId": "000003",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 121.64918053103959,
+      "visibleFractionAtLeastHalfFrames": 277
+    },
+    {
+      "medianVisibleFraction": 0.9778201719339922,
+      "minimumVisibleFraction": 0.8230754389349797,
+      "modelSHA256": "4f663267d81b10f178b13c1b14b6ce2cf986794aaa400385cfdec705217348f7",
+      "objectId": 19,
+      "sceneId": "000003",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 129.76961675468732,
+      "visibleFractionAtLeastHalfFrames": 300
+    },
+    {
+      "medianVisibleFraction": 0.9863470581332913,
+      "minimumVisibleFraction": 0.9364468864468865,
+      "modelSHA256": "1181a76d3ac1648c45fed386c1ad8e829b50d453e8881d7c50dd47c78e16172a",
+      "objectId": 1,
+      "sceneId": "000004",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 131.7313587397279,
+      "visibleFractionAtLeastHalfFrames": 300
+    },
+    {
+      "medianVisibleFraction": 0.9950248756218906,
+      "minimumVisibleFraction": 0.36528497409326427,
+      "modelSHA256": "5f1dc679c51a4f294a25f2c148ba07b3dbbb3d1e9da25fcfb4e81b9438cd528a",
+      "objectId": 16,
+      "sceneId": "000004",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 121.05509357650257,
+      "visibleFractionAtLeastHalfFrames": 291
+    },
+    {
+      "medianVisibleFraction": 0.9823396560624259,
+      "minimumVisibleFraction": 0.01020408163265306,
+      "modelSHA256": "24186305d4f61f9e1f33e60044f529331baf9fdbd1fb38cf5c48e946fee87d00",
+      "objectId": 17,
+      "sceneId": "000004",
+      "scoredFrames": 300,
+      "viewpointSpanDegrees": 125.73196299666662,
+      "visibleFractionAtLeastHalfFrames": 293
+    }
+  ],
+  "sourceFPS": null,
+  "uniqueRGBFrames": 1240
+}

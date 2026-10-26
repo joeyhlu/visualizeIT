@@ -1,0 +1,10 @@
+{
+  "generator_path": "bench/tracking_offline_dataset.py",
+  "generator_sha256": "7089199a519ed0587939728da81e9ddc614abc77f7da2ad74195620be88b2b5f",
+  "license": "CC0-1.0",
+  "model_results_included": false,
+  "native_contract_sha256": "3cb28b53971439c85e8faed53eaeea796370ae832a85376c64f89ae38e90454c",
+  "schema": "offline_sam_pose_source_lock_v1",
+  "source_release": "https://github.com/joeyhlu/visualizeIT/releases/tag/tracking-dataset-v1",
+  "weights_included": false
+}

@@ -623,6 +623,7 @@ class RunOptions:
     colmap: str | None = None
     head_path: str | None = None
     admission: Any = None              # ServingAdmission (verified by caller) or None
+    recorded_artifact: Mapping[str, Any] | None = None  # explicit finite-recorded-only artifact opt-in
     neural_backends: Mapping[str, Any] = field(default_factory=dict)  # role -> NeuralBackend (tests inject fakes)
     family: str | None = None
     write_overlays: bool = True
@@ -1307,7 +1308,8 @@ class Pipeline:
         from . import workbench_neural as wn
         from . import workbench_image_io as wio
         import dataclasses
-        pre = wn.neural_preflight(head_path=Path(self.opt.head_path) if self.opt.head_path else None)
+        pre = wn.neural_preflight(head_path=Path(self.opt.head_path) if self.opt.head_path else None,
+                                  recorded_artifact=self.opt.recorded_artifact)
         if self.clip.intrinsics.status == "unavailable":
             return self._neural_block(role, "calibration_unavailable: the metric neural profile needs K")
         backend = self.opt.neural_backends.get(role)
@@ -1412,7 +1414,8 @@ class Pipeline:
                                         "warmup_frames": len(plan["warmup"])})
                     with self.tel.measure(f"{role}_initialization", sync_gpu=True):
                         backend = wn.GoTrackMetricBackend(role, plan["bundle"], device=self.opt.device,
-                                                          head_path=Path(self.opt.head_path) if self.opt.head_path else None)
+                                                          head_path=Path(self.opt.head_path) if self.opt.head_path else None,
+                                                          recorded_artifact=self.opt.recorded_artifact)
                 except Exception as exc:  # noqa: BLE001 - missing runtime/weights are reported, never faked
                     return self._neural_block(role, f"neural_backend_unavailable: {type(exc).__name__}: {exc}", preflight=pre)
             if plan["seed_target"] is not None and hasattr(backend, "seed_target_frame_id"):
@@ -1789,19 +1792,22 @@ def cmd_run(ws: Workspace, args) -> int:
     roles = tuple(args.roles.split(",")) if args.roles else ("primary_neural", "frozen_baseline", "relative_geometry")
     run = build_run_spec(clip, mode=args.mode, first_frame=args.first_frame, count=args.count, roles=roles,
                          artwork_kind=args.artwork, config={"mask_set": args.masks} if args.masks else None)
+    from . import workbench_neural as wn
+    proof_path = getattr(args, "recorded_artifact", None)
+    proof = wn.load_recorded_artifact_proof(Path(proof_path)) if proof_path else None
     admission = None
     if args.admission:
-        from . import workbench_neural as wn
-        admission = wn.load_admission(Path(args.admission))
+        admission = wn.load_admission(Path(args.admission), recorded_artifact=proof)
         log(f"admission {'verified' if admission.admitted else 'REJECTED'}: {list(admission.reasons)[:4]}")
     options = RunOptions(mask_set=args.masks, colmap=args.colmap, head_path=args.head, admission=admission,
-                         metric_bundle=args.metric_bundle, device=args.device)
+                         metric_bundle=args.metric_bundle, device=args.device, recorded_artifact=proof)
     if args.dry_run:
         from . import workbench_neural as wn
         from . import workbench_reconstruction as wr
         _print({"status": "dry_run", "executed": False, "run": run.to_dict(),
                 "colmap": wr.preflight(args.colmap).get("reason") or "available",
-                "neural": wn.neural_preflight(head_path=Path(args.head) if args.head else None)["blocked_reasons"],
+                "neural": wn.neural_preflight(head_path=Path(args.head) if args.head else None,
+                                              recorded_artifact=proof)["blocked_reasons"],
                 "masks": MaskStore(ws, clip.clip_id, args.masks).available})
         return EXIT_DRY_RUN
     ws.init()
@@ -1839,6 +1845,18 @@ def cmd_gate(ws: Workspace, args) -> int:
     """Earn (or diagnose) workbench_integer_metric_v1 serving admission."""
     from . import workbench_neural as wn
     from .vision import cv2
+    proof_path = getattr(args, "recorded_artifact", None)
+    proof = wn.load_recorded_artifact_proof(Path(proof_path)) if proof_path else None
+    if args.gate == "artifact":
+        proof = wn.create_recorded_artifact_proof(head_path=Path(args.head), reference_path=Path(args.reference),
+                                                 training_config_path=Path(args.training_config) if args.training_config else None,
+                                                 training_config_metadata_only=args.training_config_metadata_only)
+        _write_new(Path(args.out), proof)
+        _print({"schema": proof["schema"], "proof_sha256": proof["proof_sha256"],
+                "execution_scope": proof["execution_scope"], "historical_small_records_verified": False,
+                "historical_receipts_verified": False, "execution_admission_granted": False, "live_eligible": False,
+                "training_configuration": proof["training_configuration"]})
+        return EXIT_COMPLETED
     if args.gate == "bundle":
         body = wn.historical_metric_bundle(args.name, principal_point_origin=args.principal_origin)
         _write_new(Path(args.out), body)
@@ -1880,7 +1898,7 @@ def cmd_gate(ws: Workspace, args) -> int:
         cases.extend(_read_json(Path(path))["cases"])
     if args.gate == "contract":
         contract = wn.prepare_workbench_contract(cases, head_path=Path(args.head), reference_path=Path(args.reference),
-                                                 verify_base=not args.skip_base_hash)
+                                                 verify_base=not args.skip_base_hash, recorded_artifact=proof)
         wn.save_contract(contract, Path(args.out))
         closure = contract.body["source_closure"]
         _print({"contract_sha256": contract.sha256, "families": contract.body["families"],
@@ -1915,11 +1933,11 @@ def cmd_gate(ws: Workspace, args) -> int:
         with wt.gpu_stage("gate_parity"):
             receipt = wn.run_fullimage_head_parity(loaded, contract=contract, head_path=Path(args.head),
                                                    reference_path=Path(args.reference), output_dir=Path(args.out),
-                                                   device=args.device)
+                                                   device=args.device, recorded_artifact=proof)
         _print({"all_passed": receipt["all_passed"], "receipt_sha256": receipt["receipt_sha256"]})
         return EXIT_COMPLETED if receipt["all_passed"] else EXIT_FAILED
     if args.gate == "verify":
-        admission = wn.load_admission(Path(args.admission))
+        admission = wn.load_admission(Path(args.admission), recorded_artifact=proof)
         _print(admission.to_dict())
         return EXIT_COMPLETED if admission.admitted else EXIT_BLOCKED
     raise WorkbenchCLIError("unknown gate command")
@@ -1966,6 +1984,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--artwork", choices=("checkerboard", "directional"), default="checkerboard")
     s.add_argument("--admission", help="admission dir {contract.json, geometry.json, parity/}; re-verified each run")
     s.add_argument("--metric-bundle", help="workbench_metric_bundle_v1 file (pinned metric GLB + labelled seed)")
+    s.add_argument("--recorded-artifact", help="explicit NEW fresh-local proof; finite recorded-only, never live")
     s.add_argument("--device", default="cpu", help="torch device for admitted neural roles (parent-scheduled)")
     s.add_argument("--dry-run", action="store_true", help="print the plan; executes nothing (exit 4)")
     s = sub.add_parser("report", help="print a run report")
@@ -1982,6 +2001,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--dry-run", action="store_true")
     s = sub.add_parser("gate", help="earn/verify workbench_integer_metric_v1 serving admission")
     g = s.add_subparsers(dest="gate", required=True)
+    gs = g.add_parser("artifact", help="earn NEW pinned-artifact proof, finite recorded-only; NOT admission/history")
+    gs.add_argument("--head", required=True)
+    gs.add_argument("--reference", required=True)
+    config_mode = gs.add_mutually_exclusive_group(required=True)
+    config_mode.add_argument("--training-config", help="configuration whose canonical identity is d11504b…")
+    config_mode.add_argument("--training-config-metadata-only", action="store_true",
+                             help="explicitly verify d115… identity in authenticated export/reference; raw config unavailable")
+    gs.add_argument("--out", required=True)
     gs = g.add_parser("bundle", help="metric bundle for a historical case (controlled_init seed)")
     gs.add_argument("name", choices=("keyboard", "mug", "ranch"))
     gs.add_argument("--principal-origin", required=True, choices=("integer_centers", "corner"),
@@ -1998,12 +2025,14 @@ def build_parser() -> argparse.ArgumentParser:
     gs.add_argument("--head", required=True)
     gs.add_argument("--reference", required=True, help="run/best.pt (0c211531)")
     gs.add_argument("--skip-base-hash", action="store_true")
+    gs.add_argument("--recorded-artifact", help="explicit fresh-local finite-recorded-only proof")
     gs.add_argument("--out", required=True)
     gs = g.add_parser("geometry", help="manufactured-scene geometry validation")
     gs.add_argument("--production", action="store_true", help="measure the actual renderer + crop pipeline")
     gs.add_argument("--out", required=True)
     gs = g.add_parser("parity", help="full-image reference-vs-export head parity (runs the network twice)")
     gs.add_argument("--contract", required=True)
+    gs.add_argument("--recorded-artifact", help="must match the fresh-local proof in the contract")
     gs.add_argument("--cases", nargs="+", required=True)
     gs.add_argument("--head", required=True)
     gs.add_argument("--reference", required=True)
@@ -2011,6 +2040,7 @@ def build_parser() -> argparse.ArgumentParser:
     gs.add_argument("--out", required=True, help="new parity directory")
     gs = g.add_parser("verify", help="recompute admission from an admission directory")
     gs.add_argument("--admission", required=True)
+    gs.add_argument("--recorded-artifact", help="explicit fresh-local finite-recorded-only proof")
     return p
 
 

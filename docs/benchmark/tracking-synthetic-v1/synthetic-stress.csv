@@ -1,0 +1,25 @@
+scenario,system,label,visible_reprojection_coverage_percent,visible_public_pose_availability_percent,all_frame_public_pose_availability_percent,update_fps,unique_scored_frames,visible_frames_with_repeats,timed_unique_frames,initialization_failed_unique_frames
+smooth,original_rigid,Original rigid (df788084),100.0,100.0,100.0,39.24119988489351,570,1710,570,0
+smooth,current_rigid,Current rigid,100.0,100.0,100.0,35.11865023012951,570,1710,570,0
+smooth,current_prototype,Current stream wrapper,100.0,100.0,100.0,35.064935296231184,570,1710,570,0
+fast_motion,original_rigid,Original rigid (df788084),100.0,100.0,100.0,44.24462031818758,570,1710,570,0
+fast_motion,current_rigid,Current rigid,99.47368421052632,99.82456140350877,99.82456140350877,38.14631010969455,570,1710,570,0
+fast_motion,current_prototype,Current stream wrapper,98.94736842105263,99.29824561403508,99.29824561403508,36.47529479279421,570,1710,570,0
+motion_blur,original_rigid,Original rigid (df788084),96.49122807017544,100.0,100.0,89.53251719076385,570,1710,570,0
+motion_blur,current_rigid,Current rigid,94.91228070175438,94.91228070175438,94.91228070175438,70.1933667788943,570,1710,570,0
+motion_blur,current_prototype,Current stream wrapper,94.91228070175438,94.91228070175438,94.91228070175438,67.50806128415556,570,1710,570,0
+illumination,original_rigid,Original rigid (df788084),100.0,100.0,100.0,44.612174195310075,570,1710,570,0
+illumination,current_rigid,Current rigid,100.0,100.0,100.0,37.63601623581939,570,1710,570,0
+illumination,current_prototype,Current stream wrapper,100.0,100.0,100.0,36.337661475296755,570,1710,570,0
+partial_occlusion,original_rigid,Original rigid (df788084),67.48466257668711,71.98364008179959,75.08771929824562,29.18892039403213,570,1467,570,0
+partial_occlusion,current_rigid,Current rigid,62.78118609406953,67.48466257668711,72.10526315789474,25.035043842819523,570,1467,570,0
+partial_occlusion,current_prototype,Current stream wrapper,61.14519427402863,65.84867075664621,70.70175438596492,24.202443073242,570,1467,570,0
+full_occlusion,original_rigid,Original rigid (df788084),80.92243186582809,81.55136268343816,68.24561403508773,32.33229765454876,570,1431,570,0
+full_occlusion,current_rigid,Current rigid,81.13207547169812,81.55136268343816,68.24561403508773,30.021409186492125,570,1431,570,0
+full_occlusion,current_prototype,Current stream wrapper,72.53668763102725,72.53668763102725,60.70175438596491,26.659561937264524,570,1431,570,0
+exit_reentry,original_rigid,Original rigid (df788084),86.39455782312925,88.88888888888889,69.29824561403508,41.61990784516959,570,1323,570,0
+exit_reentry,current_rigid,Current rigid,88.66213151927438,88.88888888888889,69.29824561403508,36.1996109734455,570,1323,570,0
+exit_reentry,current_prototype,Current stream wrapper,86.39455782312925,86.39455782312925,67.36842105263158,30.55922181594781,570,1323,570,0
+low_texture,original_rigid,Original rigid (df788084),0.0,0.0,0.0,,570,1710,0,570
+low_texture,current_rigid,Current rigid,0.0,0.0,0.0,,570,1710,0,570
+low_texture,current_prototype,Current stream wrapper,0.0,0.0,0.0,,570,1710,0,570

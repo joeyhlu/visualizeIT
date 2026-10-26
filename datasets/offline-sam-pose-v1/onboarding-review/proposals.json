@@ -1,0 +1,290 @@
+[
+  {
+    "authorized_mask_sha256": "0fe68cfa0fa211a56e3993b94716df96711b2f586e40b475cd4a10a3cc21cb3b",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 20,
+    "positive": [
+      [
+        370,
+        170
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000020-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000001/000009.png",
+    "rgb_sha256": "5d1063130facfc9ca389644b96e0fab8306e4208fc34fee9ae7f3c69f449229a",
+    "scene_id": "000001",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "7fe890a48b6e2829025b5ca8a85fa0e47cd153f412b905c2bb933dd91d53d702",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 28,
+    "positive": [
+      [
+        247,
+        232
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000028-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000001/000009.png",
+    "rgb_sha256": "5d1063130facfc9ca389644b96e0fab8306e4208fc34fee9ae7f3c69f449229a",
+    "scene_id": "000001",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "ed96fd115e48566b60a693e230a38abc4b6d1d227e10201c3ddc8b5fb66e9584",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 33,
+    "positive": [
+      [
+        491,
+        245
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000033-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000001/000009.png",
+    "rgb_sha256": "5d1063130facfc9ca389644b96e0fab8306e4208fc34fee9ae7f3c69f449229a",
+    "scene_id": "000001",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "9b8f74852d9c5aa3f8a94e9071776bf8316d200daa3513d54129bc592a0dedac",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 2,
+    "positive": [
+      [
+        333,
+        318
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000002-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000002/000009.png",
+    "rgb_sha256": "f6523e49cd06b2ca55c687dd9305c99423a75b2e8bf05e9c0dabeeb541131dec",
+    "scene_id": "000002",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "cf624e06d7b893f2be430a0fde72fc9de132a020d11ef2136378616f2f37b4d8",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 7,
+    "positive": [
+      [
+        320,
+        110
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000007-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000002/000009.png",
+    "rgb_sha256": "f6523e49cd06b2ca55c687dd9305c99423a75b2e8bf05e9c0dabeeb541131dec",
+    "scene_id": "000002",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "81b4338bb80b506abdbdb2c6b949c2cfad596776dcb219786978fe1db4569723",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 21,
+    "positive": [
+      [
+        481,
+        262
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000021-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000002/000009.png",
+    "rgb_sha256": "f6523e49cd06b2ca55c687dd9305c99423a75b2e8bf05e9c0dabeeb541131dec",
+    "scene_id": "000002",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "a2dbb80d93b747c5a10099fc611cf94a251cb36756b0934d25ed25d6a1fe9527",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 4,
+    "positive": [
+      [
+        328,
+        338
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000004-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000003/000009.png",
+    "rgb_sha256": "49c244f4af8882a15e3bb47ea4ba5f64b3da8b0d61a13a13a8337b10a3fc5232",
+    "scene_id": "000003",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "131e9c25c5cb89b48568c1a72aefffa4599ce5de37b3980db509b3dab57f7b7f",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 9,
+    "positive": [
+      [
+        471,
+        277
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000009-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000003/000009.png",
+    "rgb_sha256": "49c244f4af8882a15e3bb47ea4ba5f64b3da8b0d61a13a13a8337b10a3fc5232",
+    "scene_id": "000003",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "36fcf7d9b809b50c5f4575f596756d85a6dae27a5ca1559892cd9da715325359",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 19,
+    "positive": [
+      [
+        395,
+        161
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000019-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000003/000009.png",
+    "rgb_sha256": "49c244f4af8882a15e3bb47ea4ba5f64b3da8b0d61a13a13a8337b10a3fc5232",
+    "scene_id": "000003",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "e6a91a012c083d719010341dce7d8698775b0424b3e40f0a118c455fc68cc263",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 1,
+    "positive": [
+      [
+        492,
+        236
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000001-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000004/000009.png",
+    "rgb_sha256": "ca9d21cc98c0959731ebc6d5199aec4c7b85bace806fa26d75e82a68f061e0f0",
+    "scene_id": "000004",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "e170cea37fc64d5b0b5497819f458bdca85d1e42aefbe96dbf59d3ac7552dab6",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 16,
+    "positive": [
+      [
+        341,
+        327
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000016-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000004/000009.png",
+    "rgb_sha256": "ca9d21cc98c0959731ebc6d5199aec4c7b85bace806fa26d75e82a68f061e0f0",
+    "scene_id": "000004",
+    "source_frame_index": 9
+  },
+  {
+    "authorized_mask_sha256": "f06f7133b5ee5899b92d64921b347466b85fd2490c17cb0483de7ef641dc6ac3",
+    "frame_id": "f000009",
+    "negative": [
+      [
+        16,
+        16
+      ]
+    ],
+    "object_id": 17,
+    "positive": [
+      [
+        348,
+        217
+      ]
+    ],
+    "proposal_source": "Authorized onboarding frame9 visible-mask interior maximum; negative background corner; must be visually reviewed",
+    "review_mask_path": "onboarding-review/object-000017-source9-mask.png",
+    "reviewed": false,
+    "rgb_path": "inference/rgb/scene000004/000009.png",
+    "rgb_sha256": "ca9d21cc98c0959731ebc6d5199aec4c7b85bace806fa26d75e82a68f061e0f0",
+    "scene_id": "000004",
+    "source_frame_index": 9
+  }
+]

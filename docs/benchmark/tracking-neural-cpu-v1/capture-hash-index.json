@@ -1,0 +1,1658 @@
+{
+  "schemaVersion": 1,
+  "capturedForwards": 30,
+  "totalCaptureBytes": 14238271,
+  "capturesPublished": false,
+  "artifacts": [
+    {
+      "path": "reference_best/authorized-onboarding-8-forward-0.npz",
+      "bytes": 465822,
+      "sha256": "17c5935a375c97a047650bdd53e07b0f7980955f0859b1b1419f9c286b2eca35",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "65d4b2e9aa7eed94ab3d8922d13b2ec0c5d509906746b91e7fbef311322e181b"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "37b31191c612d6d4f6c73f713a5a9892b0fb284b2bd9b08d8d3bd230c805b6f1"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "4d1b48576840343f9b7dfc9bcf7a46afb1afd692e73c10e69ae891971a90d603"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "0b88a8284cf0e296cf44e72283de6e63723b9e82c668d18fec007c1d1131f40a"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "6f79fe41ddf18d4dae29012ba77838a597e5efa5c6fc0014128ba5bb1873d4cf"
+        }
+      }
+    },
+    {
+      "path": "reference_best/authorized-onboarding-8-forward-1.npz",
+      "bytes": 474538,
+      "sha256": "9222a7c79e8c1bd715770be6a09cd33f87af94789217ab28b736b07dd0b4b7e3",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "ee2447003e02eb15eae00cdebee545241fb0ccf5427c323ebc2293758fd088de"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "760b952d1b0e9a6fe261222101c953ea048ac8e8df5a1ce3c9d02f0ba9cdcee8"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "cb731bc5c286052d87e2e1634350015a51b2336a8346029486668fcf2ddf84e8"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "78b976d6e28e486212a6a7a3d061a66069212476a2033869b53bd5719724bb31"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "f0e9e949a47bd028ea26bbe3a208c92892ccccc7ba8f146d2a235e7d2767b78b"
+        }
+      }
+    },
+    {
+      "path": "reference_best/authorized-onboarding-8-forward-2.npz",
+      "bytes": 475229,
+      "sha256": "8f9d7fefdfd6f51d1c1cd5b2da3b79790db1080c0f062f8f04a6537f9b052ec6",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "59224815d565733b1995d2fafa02cf25862a63748c909c87cb08b67e284fc894"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "080fc3ecd9f31f9b67d5f8165ff5e0a2a0660f8a9cb77af8ebef807047685640"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "db7538b0ec2fefd0ee71191b510fe34053912acc8a93962bfc7c18de5128451f"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "1de1f3fd5a4f102744d69d434fb1f31d41428504ee71e80074b6726d8d8ef7e2"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "658e62cabdd26551a5a8cd767386ac77750da9d4c430edd7cc673c75f5318d1a"
+        }
+      }
+    },
+    {
+      "path": "reference_best/authorized-onboarding-8-forward-3.npz",
+      "bytes": 476083,
+      "sha256": "5020def2ac4d0e4ff5b0d197a40a8e85c03f81c338feac6ae7c8e16475b9e046",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "6d39d01fa22bb2ba7f094d4bb3de776bbf2cc15944524a02d50c7b5eb4038921"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "0abdda70f109482e49e80f9ae8dfae7d6f693c786e39b73b053c8e2c5e6624e7"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "029bb2fd003e11c6a6d36bf86165fed8c5d30a9ebcaf7a189b52deba5d187712"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "99139822ac2ba78d6774dbf79aa7494ccf9e3092ae272f6ef6bc4e8cd84f2a50"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "0ff2a2ff40b7ee2152f9f713dcc99cba5ab9cf2de11a72148093c816b59d9cf5"
+        }
+      }
+    },
+    {
+      "path": "reference_best/authorized-onboarding-8-forward-4.npz",
+      "bytes": 475242,
+      "sha256": "2694338e70eec3099f2365918a71e9634b8b9e40d2e1e424be78214f0777483e",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "e4b9da66c28e06556064db61775ada4814e8c5b5c52886aeaefeec66239e716c"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "3241bf2bcd0477759261454125b7e1299002f56288ad63e7bfa89c7b8041aa33"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "b59723cd225dd1091417c777f0770da2441c108dd11bee736ec2e1ab76f60bfe"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "87ad9b63b4f319825a379c0705ef521f39438059c62d440ce7d306da70229a2d"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "7c284c91cdae05dc2957e61f66e8187961a67e80733c263dad0d58b52b8320e3"
+        }
+      }
+    },
+    {
+      "path": "reference_best/authorized-onboarding-9-forward-0.npz",
+      "bytes": 470011,
+      "sha256": "7e1e4cf4103f96da4f4725a82d95c5ab4a8e4ab634425c52ee286990e0867780",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "da61616692a182885d245a242af2305602b1857394b7d88295a269629b7570d3"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "c0e698fca8505e195ecd376b06b0fa66fe027cfa1d2f42af5114905e71779af6"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "d2ab49e89b1a13f45a3a4957035010068f11459c15ec47a0d21d0c6f6938c9ef"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "fda0d2a4802e075798a996576bb48b186d2c8c36932d3ce25b67975a9a188171"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "13a79ca5693d261340c30dcf7c094a2319b405ad7d1cf03b5c2be1ac242fc547"
+        }
+      }
+    },
+    {
+      "path": "reference_best/authorized-onboarding-9-forward-1.npz",
+      "bytes": 475599,
+      "sha256": "f32eaa51734ca3e41521507093edd97e05672b7e4d64af4fed5f63c45160b7a8",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "b0226e080987f1742a89eeac1014d00a2c418fdbad42a7e8f04183d8b6d646c3"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "b410671dd18680592dfcb40418fe3a445b05f24ea586a1471b3c471c72cb7a64"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "2f9366b8f70daab101806e6663ffb67c4a17fcc02821b3b0ee8678c890f34928"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "f9e60e48e0d1e0c4f2ca149198a251221af5a0c81f59dcd45361e38de0ee3989"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "344d9fb1495c1f34bea38b8d1e32c9c129860ae85fb6374e02761851714140c2"
+        }
+      }
+    },
+    {
+      "path": "reference_best/authorized-onboarding-9-forward-2.npz",
+      "bytes": 478133,
+      "sha256": "63237831031780d94786c1b4458c224a1e935b7f8c7c29ddef10ef9dd1647099",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "232e2e45cab0783daa2f2b6f772f4a1da8b37106ae09f901ca06f6cfe9ad2b88"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "35db6cee840eef78acf76bb353d73149c4459e8b4cd9b2595f3f7f6dc559051b"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "f431a60a6dc117fda1cbf096370ced135188cedd07c4a55a30781b3d054a378f"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "df4d39424ba3c87ad2981e0353dde2b6f59dedc8ca649528295e684408d8ef5d"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "9c0e0657daa285ca0a3ba3bfcea7ce54d74b320a80d5e7997db0f68b20c32ce7"
+        }
+      }
+    },
+    {
+      "path": "reference_best/authorized-onboarding-9-forward-3.npz",
+      "bytes": 477614,
+      "sha256": "dc9c4bcb9480f912bf552ac43cc096891b2a18de370eaed58a2901ab2113b566",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "81c99a5b7ffbc58d2c108306b092f3a9914ef8561dc57442ef176f493f5696c5"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "928fa8cfe6f5294982c23aba13bb7e928eb1fc59673acd1251c3d5fc171529ee"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "de75168b437f652141eca9db3ec3b0d312c487d8412200ff67f695dc117047de"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "466d8b0de37dfdf32738ec06bfefb7b754d24da114ec14e87ea7e0a47fa17366"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "fcc250c55fe37912ae75346c9624f6053c961e822db66a26e24d44e4b7bf58e7"
+        }
+      }
+    },
+    {
+      "path": "reference_best/authorized-onboarding-9-forward-4.npz",
+      "bytes": 477961,
+      "sha256": "786e3ebb5a1916caeec4ef610b7f28530cb6de551b67414513a40098f1fb1bd4",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "4005bc4ae102c34be31fe51762857e613782ddd2382c0050bdac670280ff423c"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "59a15612435501775c91f09fc7fe12438c36fe6404c8a0f3745fd1eef707805c"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "592ccee3c4ca3f8011dbd09b14fe9afd5a979483e10f7185f65c3a8a19399388"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "3f6d27faec393acb4e39ede68df270270c237981d4c7ce76bd47c0a3644ea293"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "86518a9ee94c9e46b281c962452a1ff8e08db06cf0f5953bd7784e0423de08e7"
+        }
+      }
+    },
+    {
+      "path": "adapted_export/authorized-onboarding-8-forward-0.npz",
+      "bytes": 465822,
+      "sha256": "17c5935a375c97a047650bdd53e07b0f7980955f0859b1b1419f9c286b2eca35",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "65d4b2e9aa7eed94ab3d8922d13b2ec0c5d509906746b91e7fbef311322e181b"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "37b31191c612d6d4f6c73f713a5a9892b0fb284b2bd9b08d8d3bd230c805b6f1"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "4d1b48576840343f9b7dfc9bcf7a46afb1afd692e73c10e69ae891971a90d603"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "0b88a8284cf0e296cf44e72283de6e63723b9e82c668d18fec007c1d1131f40a"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "6f79fe41ddf18d4dae29012ba77838a597e5efa5c6fc0014128ba5bb1873d4cf"
+        }
+      }
+    },
+    {
+      "path": "adapted_export/authorized-onboarding-8-forward-1.npz",
+      "bytes": 474538,
+      "sha256": "9222a7c79e8c1bd715770be6a09cd33f87af94789217ab28b736b07dd0b4b7e3",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "ee2447003e02eb15eae00cdebee545241fb0ccf5427c323ebc2293758fd088de"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "760b952d1b0e9a6fe261222101c953ea048ac8e8df5a1ce3c9d02f0ba9cdcee8"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "cb731bc5c286052d87e2e1634350015a51b2336a8346029486668fcf2ddf84e8"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "78b976d6e28e486212a6a7a3d061a66069212476a2033869b53bd5719724bb31"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "f0e9e949a47bd028ea26bbe3a208c92892ccccc7ba8f146d2a235e7d2767b78b"
+        }
+      }
+    },
+    {
+      "path": "adapted_export/authorized-onboarding-8-forward-2.npz",
+      "bytes": 475229,
+      "sha256": "8f9d7fefdfd6f51d1c1cd5b2da3b79790db1080c0f062f8f04a6537f9b052ec6",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "59224815d565733b1995d2fafa02cf25862a63748c909c87cb08b67e284fc894"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "080fc3ecd9f31f9b67d5f8165ff5e0a2a0660f8a9cb77af8ebef807047685640"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "db7538b0ec2fefd0ee71191b510fe34053912acc8a93962bfc7c18de5128451f"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "1de1f3fd5a4f102744d69d434fb1f31d41428504ee71e80074b6726d8d8ef7e2"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "658e62cabdd26551a5a8cd767386ac77750da9d4c430edd7cc673c75f5318d1a"
+        }
+      }
+    },
+    {
+      "path": "adapted_export/authorized-onboarding-8-forward-3.npz",
+      "bytes": 476083,
+      "sha256": "5020def2ac4d0e4ff5b0d197a40a8e85c03f81c338feac6ae7c8e16475b9e046",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "6d39d01fa22bb2ba7f094d4bb3de776bbf2cc15944524a02d50c7b5eb4038921"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "0abdda70f109482e49e80f9ae8dfae7d6f693c786e39b73b053c8e2c5e6624e7"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "029bb2fd003e11c6a6d36bf86165fed8c5d30a9ebcaf7a189b52deba5d187712"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "99139822ac2ba78d6774dbf79aa7494ccf9e3092ae272f6ef6bc4e8cd84f2a50"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "0ff2a2ff40b7ee2152f9f713dcc99cba5ab9cf2de11a72148093c816b59d9cf5"
+        }
+      }
+    },
+    {
+      "path": "adapted_export/authorized-onboarding-8-forward-4.npz",
+      "bytes": 475242,
+      "sha256": "2694338e70eec3099f2365918a71e9634b8b9e40d2e1e424be78214f0777483e",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "e4b9da66c28e06556064db61775ada4814e8c5b5c52886aeaefeec66239e716c"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "3241bf2bcd0477759261454125b7e1299002f56288ad63e7bfa89c7b8041aa33"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "b59723cd225dd1091417c777f0770da2441c108dd11bee736ec2e1ab76f60bfe"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "87ad9b63b4f319825a379c0705ef521f39438059c62d440ce7d306da70229a2d"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "7c284c91cdae05dc2957e61f66e8187961a67e80733c263dad0d58b52b8320e3"
+        }
+      }
+    },
+    {
+      "path": "adapted_export/authorized-onboarding-9-forward-0.npz",
+      "bytes": 470011,
+      "sha256": "7e1e4cf4103f96da4f4725a82d95c5ab4a8e4ab634425c52ee286990e0867780",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "da61616692a182885d245a242af2305602b1857394b7d88295a269629b7570d3"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "c0e698fca8505e195ecd376b06b0fa66fe027cfa1d2f42af5114905e71779af6"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "d2ab49e89b1a13f45a3a4957035010068f11459c15ec47a0d21d0c6f6938c9ef"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "fda0d2a4802e075798a996576bb48b186d2c8c36932d3ce25b67975a9a188171"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "13a79ca5693d261340c30dcf7c094a2319b405ad7d1cf03b5c2be1ac242fc547"
+        }
+      }
+    },
+    {
+      "path": "adapted_export/authorized-onboarding-9-forward-1.npz",
+      "bytes": 475599,
+      "sha256": "f32eaa51734ca3e41521507093edd97e05672b7e4d64af4fed5f63c45160b7a8",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "b0226e080987f1742a89eeac1014d00a2c418fdbad42a7e8f04183d8b6d646c3"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "b410671dd18680592dfcb40418fe3a445b05f24ea586a1471b3c471c72cb7a64"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "2f9366b8f70daab101806e6663ffb67c4a17fcc02821b3b0ee8678c890f34928"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "f9e60e48e0d1e0c4f2ca149198a251221af5a0c81f59dcd45361e38de0ee3989"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "344d9fb1495c1f34bea38b8d1e32c9c129860ae85fb6374e02761851714140c2"
+        }
+      }
+    },
+    {
+      "path": "adapted_export/authorized-onboarding-9-forward-2.npz",
+      "bytes": 478133,
+      "sha256": "63237831031780d94786c1b4458c224a1e935b7f8c7c29ddef10ef9dd1647099",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "232e2e45cab0783daa2f2b6f772f4a1da8b37106ae09f901ca06f6cfe9ad2b88"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "35db6cee840eef78acf76bb353d73149c4459e8b4cd9b2595f3f7f6dc559051b"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "f431a60a6dc117fda1cbf096370ced135188cedd07c4a55a30781b3d054a378f"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "df4d39424ba3c87ad2981e0353dde2b6f59dedc8ca649528295e684408d8ef5d"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "9c0e0657daa285ca0a3ba3bfcea7ce54d74b320a80d5e7997db0f68b20c32ce7"
+        }
+      }
+    },
+    {
+      "path": "adapted_export/authorized-onboarding-9-forward-3.npz",
+      "bytes": 477614,
+      "sha256": "dc9c4bcb9480f912bf552ac43cc096891b2a18de370eaed58a2901ab2113b566",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "81c99a5b7ffbc58d2c108306b092f3a9914ef8561dc57442ef176f493f5696c5"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "928fa8cfe6f5294982c23aba13bb7e928eb1fc59673acd1251c3d5fc171529ee"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "de75168b437f652141eca9db3ec3b0d312c487d8412200ff67f695dc117047de"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "466d8b0de37dfdf32738ec06bfefb7b754d24da114ec14e87ea7e0a47fa17366"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "fcc250c55fe37912ae75346c9624f6053c961e822db66a26e24d44e4b7bf58e7"
+        }
+      }
+    },
+    {
+      "path": "adapted_export/authorized-onboarding-9-forward-4.npz",
+      "bytes": 477961,
+      "sha256": "786e3ebb5a1916caeec4ef610b7f28530cb6de551b67414513a40098f1fb1bd4",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "4005bc4ae102c34be31fe51762857e613782ddd2382c0050bdac670280ff423c"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "59a15612435501775c91f09fc7fe12438c36fe6404c8a0f3745fd1eef707805c"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "592ccee3c4ca3f8011dbd09b14fe9afd5a979483e10f7185f65c3a8a19399388"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "3f6d27faec393acb4e39ede68df270270c237981d4c7ce76bd47c0a3644ea293"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "86518a9ee94c9e46b281c962452a1ff8e08db06cf0f5953bd7784e0423de08e7"
+        }
+      }
+    },
+    {
+      "path": "frozen_baseline/authorized-onboarding-8-forward-0.npz",
+      "bytes": 465861,
+      "sha256": "e97e77938dece9fd02c4e806017d0ad5f4b578c1b5ef65fe371bdca2405c694d",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "65d4b2e9aa7eed94ab3d8922d13b2ec0c5d509906746b91e7fbef311322e181b"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "37b31191c612d6d4f6c73f713a5a9892b0fb284b2bd9b08d8d3bd230c805b6f1"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "4d1b48576840343f9b7dfc9bcf7a46afb1afd692e73c10e69ae891971a90d603"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "0ff09aa7cdca01c7c5a5c9ab3c2337032811dcee3a8ae3f58db930740478d797"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "6f79fe41ddf18d4dae29012ba77838a597e5efa5c6fc0014128ba5bb1873d4cf"
+        }
+      }
+    },
+    {
+      "path": "frozen_baseline/authorized-onboarding-8-forward-1.npz",
+      "bytes": 475316,
+      "sha256": "27ad0ff8d27b28f0dbd734d1b350ed90a9f5745e91f1ce3fd4210bfcfe7805c4",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "e6184be1fe4530065648436281600b0096b87490bedb05049ce8e4839cabab03"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "4272a8422c0b221227f2a9f2170add35014ae1ed3fa8e393ef24cbffab03592a"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "6d102c8347bc18cc53f2d79606a5c9155d0b40979609739c6ea6f8668e93e928"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "051fba9d30339d0c913e2fafa53f69c9bf33acd6562f2640e9ff5820d6811f5b"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "f02c0d3ab10a87f4cab7fed0d538671e7cf47bc76b2a9e62f1f2ef64720993a6"
+        }
+      }
+    },
+    {
+      "path": "frozen_baseline/authorized-onboarding-8-forward-2.npz",
+      "bytes": 474195,
+      "sha256": "c9ff00cd7c0c7aafd3b7f3967e7458517d87e655055279b1515f2f6ca2acad6a",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "a2fb3698807a956791596333d3e2f65b3d5dad2d0d0fec9a3c523639f2135af2"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "16fd6b9a31fab19685cb954e416ef403126097d3540fe6b0687af25a37fb9bac"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "36ecf76c6d1dd993b8cb61add02c21d0a07a88001918a14ba787b722899c3110"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "02b01fc724d07221db5c1ccc5b9bc7c3ff4c7721467c269162734165bf3a045e"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "a64a18b6f30706783a5c429d6bbbbe3a130ebef49fda2dbc2217060787c3ea8e"
+        }
+      }
+    },
+    {
+      "path": "frozen_baseline/authorized-onboarding-8-forward-3.npz",
+      "bytes": 475847,
+      "sha256": "92809a3b9b6e3daaab49b0b93e07e30feedaa8c205477fd13cf417d99b99aa3f",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "e6f4e7194792bd424d5f362187d48427960c6e44c2625934a0688fdd9b53f139"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "1b36c4dc76d0d3590a46b430fae902342901a0d9a2d308f94145cfdefef1545d"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "5202cc388175ba0a82501fc158c9fde85594fb52ec06916468123d99981371a4"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "e09d6b491a6f39314e1a6a4dd74e3bc33b014f51f91d876856c11693bb6c7f21"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "c12c77e8d9f231fac336539bea1b4c7e09d0978100160734598516a9ed7c041d"
+        }
+      }
+    },
+    {
+      "path": "frozen_baseline/authorized-onboarding-8-forward-4.npz",
+      "bytes": 475337,
+      "sha256": "ee92f2fe7cf34c2954270fd6383da6d851a73733d1a7c378be04514141685765",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "b365687955cbeafa9cad79b0388ff477b4e771c2307510fb180a5c1f53aa56f7"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "0b1230f85b3669c3a104e63f1097f47fa27f4f8dd0279bc499eac9f77082b83d"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "843c58937c0764e7f622f248239b61e0c1ca6b51a804ded2b131d42aceb95522"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "14473a174a8c17d48d3ad28e1d8fd4f3f85b3c706416bd0c658d5aa75c39aa98"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "fa17f56d5cdbe10c6b403b946adc11d0dc5e0c3189a3d4fe223e4f6e8f58d121"
+        }
+      }
+    },
+    {
+      "path": "frozen_baseline/authorized-onboarding-9-forward-0.npz",
+      "bytes": 470031,
+      "sha256": "8d82ceb6b155e16dc2e7b83110e2f38800c4d5cdda9fc226e2966afa240a6cfd",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "da61616692a182885d245a242af2305602b1857394b7d88295a269629b7570d3"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "c0e698fca8505e195ecd376b06b0fa66fe027cfa1d2f42af5114905e71779af6"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "d2ab49e89b1a13f45a3a4957035010068f11459c15ec47a0d21d0c6f6938c9ef"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "c115fcb72ce7625da506ddb751dee5591b576fb6906e90a1a0f7fbc00f326992"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "13a79ca5693d261340c30dcf7c094a2319b405ad7d1cf03b5c2be1ac242fc547"
+        }
+      }
+    },
+    {
+      "path": "frozen_baseline/authorized-onboarding-9-forward-1.npz",
+      "bytes": 475546,
+      "sha256": "a230f7acaf9ff7716bcb2fe77980950a4c2785094a0444cd3547426ef80a9ea4",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "9391d289fb0820a65bfba5f5c18150dd8095074155e0ad2c638eebfac7f0c3c5"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "1579565199e9db514719ff21c713291dae666da5d772e8bb8f2ea8499fb13dd2"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "9dce30392732d10cbd51b0eca094c80cfb0c919c4a15958d2fa0a8be8e2e9a62"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "9cd50faf4489bb5388742824d8f819df5c4a7d025c6c091720dacffbeca890a9"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "8da4e447af8776878bf4426e79f6b3074bf6883c81b2434e8ea07ea9445a05a5"
+        }
+      }
+    },
+    {
+      "path": "frozen_baseline/authorized-onboarding-9-forward-2.npz",
+      "bytes": 478309,
+      "sha256": "f9d07884a0dc3b6bfc9fad48e6f9f5c80e7e99f58f24427e94f201acb2e6ccf0",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "89f0e3835e6a8639f8e217bcfe56051bf68c75180ee5c55d2ef1b8ef80801842"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "3b2375f5674a9642e166b5bd38717f5a6aa361beabc09436a562440ee70907af"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "1ca18585f5f819fda1c3c424e88c99b2abe8c0ed184143999ec105d137ecd306"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "fa9e60e2bcad917aba82f84d71f0bafcc6efc9819765bb402643f0ba1e5955d6"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "db947eb6488b3e1bbcdea0dd1ffdfd97394f187591f2ec66f10a4c68ff40c922"
+        }
+      }
+    },
+    {
+      "path": "frozen_baseline/authorized-onboarding-9-forward-3.npz",
+      "bytes": 477355,
+      "sha256": "302cdd964e8ec08ce4ff7899cc284b3f93b6a15d81a85aca4bc5521681c8615f",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "d97ee6f8bfeb3923a660bee2f9110e3b9ca3eee85a4111eed544c56a2c9f2024"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "f8cfde904ee803b241bff303a1b04d4d4d0424cbd9e2fe504733496163659261"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "2a24f2aa16ee5dbc67d0b500c40fc11c34bc9f10b36ad7b70cb2f8fad30f7129"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "6274efc0bb756f6e7b2e62381788c2c91fef821122fd3dba66b10fe044756dd0"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "c27b9278eb8dbc98ca389351172ed24265488a8eb816071f09c82e41b95e19e6"
+        }
+      }
+    },
+    {
+      "path": "frozen_baseline/authorized-onboarding-9-forward-4.npz",
+      "bytes": 478010,
+      "sha256": "45afe55328e86fa76696c5dee613c55f6005a78a7758a9b098f53cca0b66c4f9",
+      "tensors": {
+        "query": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "9c1c5b1b3c24b4d121a8efeafa0526156af80307c8c58bbffcd9454ae6c86427"
+        },
+        "template": {
+          "shape": [
+            1,
+            3,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "78ead0dff4ed9c2463df35ca6ce082f8a5f5a9bd23b100683dec3867bd1b7267"
+        },
+        "rendered_mask": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "|b1",
+          "sha256": "43e9cb7cc7fdec0157196a68c0d3b2f12b205d6fa772b5d296c2d24a3d8353d6"
+        },
+        "flow": {
+          "shape": [
+            1,
+            2,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "ad2d58bb62092ce39a559a88fcb27b0f0740bd17ff2d01b6ff8e71c354d34c55"
+        },
+        "confidence": {
+          "shape": [
+            1,
+            280,
+            280
+          ],
+          "dtype": "<f4",
+          "sha256": "991379723a86fd2654bcc4327a5da89a525cd4e4a9f3d2ece51a6ff85840f24b"
+        }
+      }
+    }
+  ]
+}

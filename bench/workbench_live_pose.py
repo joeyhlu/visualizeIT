@@ -262,7 +262,14 @@ class ConfiguredGoTrackFactory:
             raise NativeError("model_identity", "primary head/base differs from trained pins", 503)
         if bindings != receipt["bindings"]:
             raise NativeError("admission_drift", "live source/config/runtime/asset bindings differ", 503)
-        serving = wn.load_admission(self.path(c["serving_admission_dir"]), root=self.root)
+        # Recorded-only portability evidence can never be promoted to LIVE by a
+        # separately supplied receipt or operator config. Reverification enforces
+        # this scope before any provider import, image decode or model load.
+        serving = wn.load_admission(self.path(c["serving_admission_dir"]), root=self.root,
+                                    execution_context="live")
+        if (serving.body.get("execution_scope") == wn.RECORDED_EXECUTION_SCOPE
+                or serving.body.get("live_eligible") is False):
+            raise NativeError("admission_unavailable", "fresh recorded-only admission cannot authorize LIVE", 503)
         if not serving.admitted or serving.body.get("contract_sha256") != receipt["serving_contract_sha256"]:
             raise NativeError("admission_unavailable", "recorded serving admission invalid: "+"; ".join(serving.reasons[:4]), 503)
         families = {v["family"] for v in bindings["assets"].values()}

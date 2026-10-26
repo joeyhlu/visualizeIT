@@ -1,0 +1,525 @@
+{
+  "schema": "visualizeit-synthetic-tracking/1",
+  "imageSize": [
+    320,
+    240
+  ],
+  "framesPerSequence": 200,
+  "onboardingFrames": 10,
+  "sequenceLimit": 24,
+  "scenarios": [
+    "smooth",
+    "fast_motion",
+    "motion_blur",
+    "illumination",
+    "partial_occlusion",
+    "full_occlusion",
+    "exit_reentry",
+    "low_texture"
+  ],
+  "splits": [
+    "train",
+    "dev",
+    "test"
+  ],
+  "splitSeeds": [
+    27181,
+    31415,
+    92653
+  ],
+  "generator": "bench/tracking_synthetic_data.py",
+  "license": "CC0-1.0",
+  "evidenceKind": "synthetic_stress",
+  "selectionDigest": "d9330ac104b1c9d7e963a3c06d6be0ec44df469e3a3636ecec523fea90814a84",
+  "sequences": [
+    {
+      "sequenceId": "train-smooth-27181",
+      "objectId": 1,
+      "split": "train",
+      "seed": 27181,
+      "scenario": "smooth",
+      "geometry": {
+        "kind": "tapered_prism",
+        "halfExtentsMetres": [
+          0.08912200637965556,
+          0.04647415717203839,
+          0.04960278516399369
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "e389d1a9b604cbe815d6fbb64be42501c423039991cdc5837060f2426abbc4b3"
+    },
+    {
+      "sequenceId": "train-fast_motion-27282",
+      "objectId": 2,
+      "split": "train",
+      "seed": 27282,
+      "scenario": "fast_motion",
+      "geometry": {
+        "kind": "cuboid",
+        "halfExtentsMetres": [
+          0.09031454919133869,
+          0.06273996457572965,
+          0.05749858809685441
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "dfa75c429abc29ba957e4eb536b07d858eb137426ad0bbe29f693524bd342379"
+    },
+    {
+      "sequenceId": "train-motion_blur-27383",
+      "objectId": 3,
+      "split": "train",
+      "seed": 27383,
+      "scenario": "motion_blur",
+      "geometry": {
+        "kind": "sheared_prism",
+        "halfExtentsMetres": [
+          0.07043620563209332,
+          0.06903344306754448,
+          0.05021025084291832
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "54ebae8759129b6660024329c1d29753c7c42a218318663f399d32538d03a0b4"
+    },
+    {
+      "sequenceId": "train-illumination-27484",
+      "objectId": 4,
+      "split": "train",
+      "seed": 27484,
+      "scenario": "illumination",
+      "geometry": {
+        "kind": "tapered_prism",
+        "halfExtentsMetres": [
+          0.08795896657941495,
+          0.06004716907693854,
+          0.048451237193827504
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "43e5fb339c37267039e00e3df034d10c5976c6697d206533f66ea51f3e3aa42b"
+    },
+    {
+      "sequenceId": "train-partial_occlusion-27585",
+      "objectId": 5,
+      "split": "train",
+      "seed": 27585,
+      "scenario": "partial_occlusion",
+      "geometry": {
+        "kind": "cuboid",
+        "halfExtentsMetres": [
+          0.07406228243881778,
+          0.06457311105307828,
+          0.07230972139807809
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 16,
+      "modelSHA256": "6f7b7ca96c97f6d927aa8f18f41a1d37085397c2eb2d68284767bf67245e2eed"
+    },
+    {
+      "sequenceId": "train-full_occlusion-27686",
+      "objectId": 6,
+      "split": "train",
+      "seed": 27686,
+      "scenario": "full_occlusion",
+      "geometry": {
+        "kind": "sheared_prism",
+        "halfExtentsMetres": [
+          0.0879331652284088,
+          0.05138970614390546,
+          0.06985024886386326
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 31,
+      "modelSHA256": "0d2c81bbb6ad995a719fa68c24489cf25cbcfa5e2a4042bcd8dde96f0d9978a3"
+    },
+    {
+      "sequenceId": "train-exit_reentry-27787",
+      "objectId": 7,
+      "split": "train",
+      "seed": 27787,
+      "scenario": "exit_reentry",
+      "geometry": {
+        "kind": "tapered_prism",
+        "halfExtentsMetres": [
+          0.06745194068400032,
+          0.0697374567983892,
+          0.0542319056016886
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 43,
+      "modelSHA256": "ccf7f9183c05493d8721e90798f56ae9d70c06653357ae9a7b332595367ae84b"
+    },
+    {
+      "sequenceId": "train-low_texture-27888",
+      "objectId": 8,
+      "split": "train",
+      "seed": 27888,
+      "scenario": "low_texture",
+      "geometry": {
+        "kind": "cuboid",
+        "halfExtentsMetres": [
+          0.07617598231658744,
+          0.047409854568039624,
+          0.0657316958031232
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "b1a2479cb716b24abd5fdfb17210a613ff4053b28b1f8d7a23798c7c8adaeec1"
+    },
+    {
+      "sequenceId": "dev-smooth-31415",
+      "objectId": 9,
+      "split": "dev",
+      "seed": 31415,
+      "scenario": "smooth",
+      "geometry": {
+        "kind": "sheared_prism",
+        "halfExtentsMetres": [
+          0.07999067988584822,
+          0.04845607617436819,
+          0.0708653167578846
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "988da21877fc7eac3e12d6af57cae18b00cfc104e1c308cd31c43a1205577a70"
+    },
+    {
+      "sequenceId": "dev-fast_motion-31516",
+      "objectId": 10,
+      "split": "dev",
+      "seed": 31516,
+      "scenario": "fast_motion",
+      "geometry": {
+        "kind": "tapered_prism",
+        "halfExtentsMetres": [
+          0.08623349799175396,
+          0.06198449274201309,
+          0.05532747504572501
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "76c9ecd3f75bfbaafab85884dee4f4de611097b48a01759267c41d7ba398e00b"
+    },
+    {
+      "sequenceId": "dev-motion_blur-31617",
+      "objectId": 11,
+      "split": "dev",
+      "seed": 31617,
+      "scenario": "motion_blur",
+      "geometry": {
+        "kind": "cuboid",
+        "halfExtentsMetres": [
+          0.06670338008296998,
+          0.06625197964549738,
+          0.06330685747769008
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "d30c645f1ce24715c15ac78f470f175244da70c31eb73aabb738deafc1b6f3c9"
+    },
+    {
+      "sequenceId": "dev-illumination-31718",
+      "objectId": 12,
+      "split": "dev",
+      "seed": 31718,
+      "scenario": "illumination",
+      "geometry": {
+        "kind": "sheared_prism",
+        "halfExtentsMetres": [
+          0.06992215330448541,
+          0.06216771757236347,
+          0.057135352335862165
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "778a9f7dade6a3fec12a1e50e1c1b040db49e3123ecc7049488894479d09ca40"
+    },
+    {
+      "sequenceId": "dev-partial_occlusion-31819",
+      "objectId": 13,
+      "split": "dev",
+      "seed": 31819,
+      "scenario": "partial_occlusion",
+      "geometry": {
+        "kind": "tapered_prism",
+        "halfExtentsMetres": [
+          0.08315072705945692,
+          0.06403532716883999,
+          0.05101306420129893
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 38,
+      "modelSHA256": "43ca629c6bb281a02cca660c891625eb08bb53dd6dc2d7b366b33ab094b4b3eb"
+    },
+    {
+      "sequenceId": "dev-full_occlusion-31920",
+      "objectId": 14,
+      "split": "dev",
+      "seed": 31920,
+      "scenario": "full_occlusion",
+      "geometry": {
+        "kind": "cuboid",
+        "halfExtentsMetres": [
+          0.06917355097446311,
+          0.06925563889251657,
+          0.05611967913424775
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 31,
+      "modelSHA256": "6207dbaa0ba511babaed632d7f526a292a1ca388560c4f9c957f92a86e59f887"
+    },
+    {
+      "sequenceId": "dev-exit_reentry-32021",
+      "objectId": 15,
+      "split": "dev",
+      "seed": 32021,
+      "scenario": "exit_reentry",
+      "geometry": {
+        "kind": "sheared_prism",
+        "halfExtentsMetres": [
+          0.0651883881212572,
+          0.06507636035152121,
+          0.06897672504244358
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 43,
+      "modelSHA256": "9e3f845e354b97e5de7f6120363a3e3eb1b4259c76c3d7a493fa1ba15ef1c63a"
+    },
+    {
+      "sequenceId": "dev-low_texture-32122",
+      "objectId": 16,
+      "split": "dev",
+      "seed": 32122,
+      "scenario": "low_texture",
+      "geometry": {
+        "kind": "tapered_prism",
+        "halfExtentsMetres": [
+          0.07741655650745037,
+          0.04938342581486745,
+          0.07048056275204079
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "7c4ca813a20fb695999482eb761ecd4c9b629cc4fde765dd2404e11228cdc7ce"
+    },
+    {
+      "sequenceId": "test-smooth-92653",
+      "objectId": 17,
+      "split": "test",
+      "seed": 92653,
+      "scenario": "smooth",
+      "geometry": {
+        "kind": "tapered_prism",
+        "halfExtentsMetres": [
+          0.07212907445813488,
+          0.051172521992485565,
+          0.07279838736676353
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "007b69f71ebfeb0f4d10a426714653fb8913d71a39d4dd3877be8fab4990e7c1"
+    },
+    {
+      "sequenceId": "test-fast_motion-92754",
+      "objectId": 18,
+      "split": "test",
+      "seed": 92754,
+      "scenario": "fast_motion",
+      "geometry": {
+        "kind": "cuboid",
+        "halfExtentsMetres": [
+          0.0737645243428823,
+          0.05997564612903722,
+          0.06180316887963905
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "a654eadffed9236fcb10ba74687cdf2b79679484d52a2038caec05b3a8ffd3a5"
+    },
+    {
+      "sequenceId": "test-motion_blur-92855",
+      "objectId": 19,
+      "split": "test",
+      "seed": 92855,
+      "scenario": "motion_blur",
+      "geometry": {
+        "kind": "sheared_prism",
+        "halfExtentsMetres": [
+          0.08330710573345675,
+          0.05755045310330884,
+          0.071084931087545
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "4ca6fa0cfec2648773bc84a233ddabf4edd75a05ec31fe9d402f7e73ca7cacaa"
+    },
+    {
+      "sequenceId": "test-illumination-92956",
+      "objectId": 20,
+      "split": "test",
+      "seed": 92956,
+      "scenario": "illumination",
+      "geometry": {
+        "kind": "tapered_prism",
+        "halfExtentsMetres": [
+          0.07609934856584086,
+          0.07203070342160142,
+          0.0631962092799817
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "cd41c45fae117008c48a6292ee17cfcbb9b414732189b00de99c2f1994f497e6"
+    },
+    {
+      "sequenceId": "test-partial_occlusion-93057",
+      "objectId": 21,
+      "split": "test",
+      "seed": 93057,
+      "scenario": "partial_occlusion",
+      "geometry": {
+        "kind": "cuboid",
+        "halfExtentsMetres": [
+          0.0823047587059481,
+          0.054400031440257186,
+          0.05577440443119171
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 27,
+      "modelSHA256": "e9c7218f93466d04905ca02dd3f3426bec0b71bcd57768ff2a9d6f2b9eae702c"
+    },
+    {
+      "sequenceId": "test-full_occlusion-93158",
+      "objectId": 22,
+      "split": "test",
+      "seed": 93158,
+      "scenario": "full_occlusion",
+      "geometry": {
+        "kind": "sheared_prism",
+        "halfExtentsMetres": [
+          0.06900574542909181,
+          0.06845485193104167,
+          0.07150212512276152
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 31,
+      "modelSHA256": "58dd9221a34ea419feb0df83058dbdf7c3be8c1b312ce3bd3f2ef6ec4e60a3e5"
+    },
+    {
+      "sequenceId": "test-exit_reentry-93259",
+      "objectId": 23,
+      "split": "test",
+      "seed": 93259,
+      "scenario": "exit_reentry",
+      "geometry": {
+        "kind": "tapered_prism",
+        "halfExtentsMetres": [
+          0.09061247866658054,
+          0.061189422695710496,
+          0.05094260681324486
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 43,
+      "modelSHA256": "79ba78b329170994cddff36eefc3c43b45ef2162dd5575d12dff1dc64ceadb68"
+    },
+    {
+      "sequenceId": "test-low_texture-93360",
+      "objectId": 24,
+      "split": "test",
+      "seed": 93360,
+      "scenario": "low_texture",
+      "geometry": {
+        "kind": "cuboid",
+        "halfExtentsMetres": [
+          0.0656805917583241,
+          0.04616637485832934,
+          0.059131482967468424
+        ]
+      },
+      "frames": 200,
+      "onboardingFrames": 10,
+      "scoredFrames": 190,
+      "framesBelow50PercentVisibility": 0,
+      "modelSHA256": "15250725064176f8ab682c9982ccb51d3aec9ab9c760fcf90459ffdd847650fa"
+    }
+  ],
+  "counts": {
+    "sequences": 24,
+    "frames": 4800,
+    "scoredFrames": 4560
+  },
+  "artifacts": {
+    "annotationsSHA256": "58e6734758738a8fb84358fcb2565310313db4e05c8bb152ddb61ff22846e228"
+  },
+  "caveat": "All media and labels are synthetic. Splits are procedural; no claim of real-world generalization."
+}

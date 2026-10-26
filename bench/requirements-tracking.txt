@@ -1,0 +1,5 @@
+# CPU-only initialized tracking benchmark; Python 3.12.
+# Headless OpenCV avoids GUI/OpenGL/system-display dependencies on Linux VMs.
+numpy==2.3.5
+Pillow==12.3.0
+opencv-python-headless==4.13.0.92

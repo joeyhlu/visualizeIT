@@ -1,0 +1,922 @@
+{
+  "actualBankChecks": [
+    {
+      "anchors": 300,
+      "depthRoundtripAbsMaxMM": 6.640581451389238e-05,
+      "depthRoundtripAbsMedianMM": 2.955544314842129e-05,
+      "objectId": 20,
+      "onboardingFrameId": 0,
+      "projectedAnchorsInsideCorrectVisibleMask": 1.0
+    },
+    {
+      "anchors": 300,
+      "depthRoundtripAbsMaxMM": 3.510292478914323e-05,
+      "depthRoundtripAbsMedianMM": 1.3399265141877947e-05,
+      "objectId": 20,
+      "onboardingFrameId": 9,
+      "projectedAnchorsInsideCorrectVisibleMask": 1.0
+    }
+  ],
+  "actualSavedModelMetresVsIndependentPLYMaxErrorMetres": 0.0,
+  "auditWallSeconds": 0.7862410270008695,
+  "conclusion": "No gross units/axes/calibration/model-frame mismatch found in sampled scope. Missing tracking outputs dominate low coverage; this is not causal proof of a particular failure mechanism.",
+  "contactSheetSHA256": "28e46c405613b1fbedb49429847322243281dbf53e19134bfe1f5163f494f7f5",
+  "currentPrototypeObservedFailureReasonsWithThreeRepeats": {
+    "ValueError: insufficient_onboarding_references": 900,
+    "insufficient_correspondences": 9324,
+    "insufficient_feature_coverage": 15,
+    "insufficient_inliers": 12,
+    "pnp_failed": 90,
+    "refinement_support_unstable": 6
+  },
+  "datasetRevision": "985ebaef7b1bd4bffb2039f18dd81faa647fd060",
+  "eligibleVisibleUniqueObjectFrames": 3536,
+  "initializationFailureObjects": [
+    {
+      "objectId": 33,
+      "reason": "ValueError: insufficient_onboarding_references"
+    }
+  ],
+  "inputs": {
+    "acquisitionLock": {
+      "path": ".cache/tracking-benchmark/real-v1/sources.lock.json",
+      "sha256": "8e442eabc4d0bdc629b3fca9ec1f35f296ede86ed28f986fb25f7f66101abf90"
+    },
+    "benchmarkResults": {
+      "path": "artifacts/tracking-benchmark/real-full-v1/results.json",
+      "sha256": "df33d4f746a0897aedc0dcbfb62609f89b44a8afb9f730cbe0c312fa380e69f6"
+    },
+    "evaluator": {
+      "path": ".cache/tracking-benchmark/real-v1/evaluator.json",
+      "sha256": "1fc8fe971bf000c244b35d8416d473684f826fe756ae91dea2e2a41b861d9956"
+    },
+    "inference": {
+      "path": ".cache/tracking-benchmark/real-v1/inference.json",
+      "sha256": "1bdc84f5865797c308c2a46dad67c90f532ecb3e963ac5713b80acd820831af4"
+    },
+    "savedDepthBankAsset": {
+      "path": "artifacts/tracking-benchmark/service-probe-v1-assets/dataset-02/object-000020/tracking-asset.npz",
+      "sha256": "54d587c37416ce42f0cc238b7e06eeb488d15d0f939f458a43c18f0b9b277cd2"
+    },
+    "selection": {
+      "path": ".cache/tracking-benchmark/real-v1/selection.json",
+      "sha256": "641aa6ecf551ca049f42a6a40fd36635c04862b46ddaefef03c7fa93bc93d7d3"
+    }
+  },
+  "labelFreeScoredRecords": 3600,
+  "limitations": [
+    "Source/geometry/byte audit, not independent human pose ground truth or exhaustive physical sensor calibration.",
+    "Twenty frame samples from one object per four scenes; not exhaustive per-object geometry validation.",
+    "Projected convex hull inclusion is containment, not an occlusion-aware silhouette IoU.",
+    "Front-facing sparse model depth check has no z-buffer and includes self-occluded/concave surface samples.",
+    "Pixel/object roundtrips check implementation consistency; alone they do not establish correct calibration.",
+    "Six hundred actual saved depth-bank anchors checked for HB object20 only; no detector/tracker rerun.",
+    "Custom first-ten masked RGB-D/known-pose initialization differs from the original rendered-model bank and is not the full discovery/segmentation/neural pipeline.",
+    "Observed failures do not causally separate initialization adapter, texture, depth noise, correspondence logic, or tracker weaknesses.",
+    "No GoTrack quality, live-camera FPS, phone/device readiness, or official BOP challenge score is measured."
+  ],
+  "metricInterpretation": "Custom visible-frame full-model corresponding-point mean reprojection<5px coverage; not official BOP score; no symmetry quotient; depth-bank-initialized ORB/PnP, not GoTrack.",
+  "originalMetadataHashesVerified": 12,
+  "protocol": "Independent read-only input/unit/projection audit; no tracker/neural inference or full mesh rendering",
+  "runtime": {
+    "numpy": "2.3.5",
+    "opencv": "4.13.0",
+    "pillow": "12.3.0",
+    "python": "3.12.14"
+  },
+  "sampleRGBDepthMaskResourceHashesVerifiedAgainstAcquisitionLock": 60,
+  "sampledModelHashesVerified": 4,
+  "samples": [
+    {
+      "frameId": 0,
+      "frontFacingDepthAbsMedianMM": 3.021367881974072,
+      "frontFacingDepthWithin10MM": 0.7760770975056689,
+      "frontFacingMaskedModelPoints": 1764,
+      "independentMMvsMProjectionMaxPixels": 5.684341886080802e-14,
+      "independentPixelObjectCameraRoundtripMaxPixels": 4.328512518428219e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 2.621402203105236,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        303.2406878730669,
+        87.58376505528452,
+        377.1685538523336,
+        231.6916388163029
+      ],
+      "modelVertices": 130232,
+      "objectId": 20,
+      "phase": "onboarding",
+      "projectedVsInfoBBoxMaxPixels": 2.1685538523336163,
+      "rawDepthMedianMM": 908.0,
+      "rgbSHA256": "785017dc100a0c8f1dc497bb1a0dea0da14ab9e6f009ba49a51bc542e601a4c6",
+      "sampledVertices": 4096,
+      "sceneId": "000001",
+      "sourceInfoBBox": [
+        303,
+        87,
+        375,
+        230
+      ],
+      "sourcePoseZMM": 930.3810965583206,
+      "visibility": 0.9721989382509081,
+      "visibleMaskBBox": [
+        303,
+        87,
+        376,
+        231
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9989941083489007
+    },
+    {
+      "frameId": 9,
+      "frontFacingDepthAbsMedianMM": 5.279910102374004,
+      "frontFacingDepthWithin10MM": 0.7395591647331786,
+      "frontFacingMaskedModelPoints": 1724,
+      "independentMMvsMProjectionMaxPixels": 1.1368683772161603e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 7.4153402720542e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 3.1899990378483807,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        344.0552565447377,
+        92.35250383673392,
+        407.905971896536,
+        234.37362985659624
+      ],
+      "modelVertices": 130232,
+      "objectId": 20,
+      "phase": "onboarding",
+      "projectedVsInfoBBoxMaxPixels": 2.3736298565962386,
+      "rawDepthMedianMM": 901.0,
+      "rgbSHA256": "5d1063130facfc9ca389644b96e0fab8306e4208fc34fee9ae7f3c69f449229a",
+      "sampledVertices": 4096,
+      "sceneId": "000001",
+      "sourceInfoBBox": [
+        344,
+        92,
+        406,
+        232
+      ],
+      "sourcePoseZMM": 927.0019986898877,
+      "visibility": 0.9628688408866299,
+      "visibleMaskBBox": [
+        344,
+        92,
+        407,
+        233
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9995601173020527
+    },
+    {
+      "frameId": 10,
+      "frontFacingDepthAbsMedianMM": 5.869104851516568,
+      "frontFacingDepthWithin10MM": 0.7264957264957265,
+      "frontFacingMaskedModelPoints": 1755,
+      "independentMMvsMProjectionMaxPixels": 5.684341886080802e-14,
+      "independentPixelObjectCameraRoundtripMaxPixels": 7.90623832631558e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 3.59880605201556,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        348.40757909295536,
+        92.6937541090781,
+        411.4204457463318,
+        235.1628688631419
+      ],
+      "modelVertices": 130232,
+      "objectId": 20,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 2.4204457463317794,
+      "rawDepthMedianMM": 899.0,
+      "rgbSHA256": "c7905b4909d13c68abb7f7019c95958ce4883d88394f4386eb0a768554dc3cd0",
+      "sampledVertices": 4096,
+      "sceneId": "000001",
+      "sourceInfoBBox": [
+        348,
+        93,
+        409,
+        233
+      ],
+      "sourcePoseZMM": 925.4338323572056,
+      "visibility": 0.9742937853107345,
+      "visibleMaskBBox": [
+        348,
+        93,
+        410,
+        234
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9995650913308205
+    },
+    {
+      "frameId": 159,
+      "frontFacingDepthAbsMedianMM": 2.4137963596909913,
+      "frontFacingDepthWithin10MM": 0.8183006535947712,
+      "frontFacingMaskedModelPoints": 1530,
+      "independentMMvsMProjectionMaxPixels": 5.684341886080802e-14,
+      "independentPixelObjectCameraRoundtripMaxPixels": 6.787677304842291e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 2.9378324341691577,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        246.91294401701555,
+        90.28004460933866,
+        341.32017173318206,
+        236.65631215821253
+      ],
+      "modelVertices": 130232,
+      "objectId": 20,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 2.3201717331820646,
+      "rawDepthMedianMM": 889.0,
+      "rgbSHA256": "37562bc80c8744dbece692195f8d30d7e97b81c23b5db6650df50811c11afcae",
+      "sampledVertices": 4096,
+      "sceneId": "000001",
+      "sourceInfoBBox": [
+        247,
+        90,
+        339,
+        235
+      ],
+      "sourcePoseZMM": 910.8113728902379,
+      "visibility": 0.9017341040462428,
+      "visibleMaskBBox": [
+        247,
+        90,
+        340,
+        234
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9981060606060606
+    },
+    {
+      "frameId": 309,
+      "frontFacingDepthAbsMedianMM": 1.6823321364084336,
+      "frontFacingDepthWithin10MM": 0.8401162790697675,
+      "frontFacingMaskedModelPoints": 1720,
+      "independentMMvsMProjectionMaxPixels": 1.1368683772161603e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 7.690385834107573e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 2.5231323756172177,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        416.7552475833696,
+        150.60267586415648,
+        546.475230540314,
+        310.19084628692553
+      ],
+      "modelVertices": 130232,
+      "objectId": 20,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 2.1908462869255345,
+      "rawDepthMedianMM": 776.0,
+      "rgbSHA256": "0a5da44b2bf77b6457c9de8f9048d5b012748841102feae06c17c89adbb12808",
+      "sampledVertices": 4096,
+      "sceneId": "000001",
+      "sourceInfoBBox": [
+        417,
+        151,
+        545,
+        308
+      ],
+      "sourcePoseZMM": 800.7293369064324,
+      "visibility": 0.9878422273781903,
+      "visibleMaskBBox": [
+        417,
+        151,
+        546,
+        309
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9993423524990604
+    },
+    {
+      "frameId": 0,
+      "frontFacingDepthAbsMedianMM": 4.453886905142554,
+      "frontFacingDepthWithin10MM": 0.6015578190533254,
+      "frontFacingMaskedModelPoints": 1669,
+      "independentMMvsMProjectionMaxPixels": 5.684341886080802e-14,
+      "independentPixelObjectCameraRoundtripMaxPixels": 0.000382729326392707,
+      "interiorDepthToSampledModelNearestMedianMM": 2.837159977123271,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        207.4881855300257,
+        155.34541460212165,
+        367.8328301777604,
+        351.2055696194047
+      ],
+      "modelVertices": 144266,
+      "objectId": 2,
+      "phase": "onboarding",
+      "projectedVsInfoBBoxMaxPixels": 1.8328301777603997,
+      "rawDepthMedianMM": 671.0,
+      "rgbSHA256": "dbb7058b17c25850f611fb112d43903c0597c1bd36433723bf64a13b2d0a09f8",
+      "sampledVertices": 4096,
+      "sceneId": "000002",
+      "sourceInfoBBox": [
+        206,
+        155,
+        366,
+        350
+      ],
+      "sourcePoseZMM": 700.8984258946753,
+      "visibility": 0.9662604491892436,
+      "visibleMaskBBox": [
+        206,
+        155,
+        367,
+        351
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.998228059203669
+    },
+    {
+      "frameId": 9,
+      "frontFacingDepthAbsMedianMM": 6.628689984021435,
+      "frontFacingDepthWithin10MM": 0.5304456999372253,
+      "frontFacingMaskedModelPoints": 1593,
+      "independentMMvsMProjectionMaxPixels": 5.684341886080802e-14,
+      "independentPixelObjectCameraRoundtripMaxPixels": 0.00015411196440192333,
+      "interiorDepthToSampledModelNearestMedianMM": 2.530929881510695,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        257.9117165902128,
+        161.36957972645746,
+        391.6451182250526,
+        359.5735327128108
+      ],
+      "modelVertices": 144266,
+      "objectId": 2,
+      "phase": "onboarding",
+      "projectedVsInfoBBoxMaxPixels": 1.645118225052613,
+      "rawDepthMedianMM": 659.0,
+      "rgbSHA256": "f6523e49cd06b2ca55c687dd9305c99423a75b2e8bf05e9c0dabeeb541131dec",
+      "sampledVertices": 4096,
+      "sceneId": "000002",
+      "sourceInfoBBox": [
+        257,
+        161,
+        390,
+        358
+      ],
+      "sourcePoseZMM": 686.2250622108614,
+      "visibility": 0.9548346055979644,
+      "visibleMaskBBox": [
+        257,
+        161,
+        391,
+        359
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9974461470131024
+    },
+    {
+      "frameId": 10,
+      "frontFacingDepthAbsMedianMM": 6.993906453153841,
+      "frontFacingDepthWithin10MM": 0.530625,
+      "frontFacingMaskedModelPoints": 1600,
+      "independentMMvsMProjectionMaxPixels": 1.1368683772161603e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 0.00017576126095310697,
+      "interiorDepthToSampledModelNearestMedianMM": 2.4366514734156417,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        264.71515818839123,
+        161.80397962129314,
+        394.048183208619,
+        359.7800887197309
+      ],
+      "modelVertices": 144266,
+      "objectId": 2,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 1.780088719730884,
+      "rawDepthMedianMM": 656.0,
+      "rgbSHA256": "52cbdcba52feec10acf0dcaa3aa3c4fb35841195e21732ba89416be869a969e4",
+      "sampledVertices": 4096,
+      "sceneId": "000002",
+      "sourceInfoBBox": [
+        264,
+        162,
+        393,
+        358
+      ],
+      "sourcePoseZMM": 685.104316628821,
+      "visibility": 0.9485828679801918,
+      "visibleMaskBBox": [
+        264,
+        162,
+        394,
+        359
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.998444962790181
+    },
+    {
+      "frameId": 159,
+      "frontFacingDepthAbsMedianMM": 2.7628360413722817,
+      "frontFacingDepthWithin10MM": 0.6865671641791045,
+      "frontFacingMaskedModelPoints": 1742,
+      "independentMMvsMProjectionMaxPixels": 5.684341886080802e-14,
+      "independentPixelObjectCameraRoundtripMaxPixels": 0.00026631165527803114,
+      "interiorDepthToSampledModelNearestMedianMM": 2.5420577612838073,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        180.7856998033392,
+        145.187175924288,
+        343.5198031841401,
+        322.24600230293487
+      ],
+      "modelVertices": 144266,
+      "objectId": 2,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 1.5198031841400734,
+      "rawDepthMedianMM": 707.0,
+      "rgbSHA256": "1a9fe1359918c2d7cf8be3a35b0d9893d32f30b294099200d9fab87a099482bd",
+      "sampledVertices": 4096,
+      "sceneId": "000002",
+      "sourceInfoBBox": [
+        180,
+        145,
+        342,
+        321
+      ],
+      "sourcePoseZMM": 733.190547918576,
+      "visibility": 0.9533459000942507,
+      "visibleMaskBBox": [
+        180,
+        145,
+        343,
+        322
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9995056846267919
+    },
+    {
+      "frameId": 309,
+      "frontFacingDepthAbsMedianMM": 3.4934994986995775,
+      "frontFacingDepthWithin10MM": 0.7435174746335964,
+      "frontFacingMaskedModelPoints": 1774,
+      "independentMMvsMProjectionMaxPixels": 1.1368683772161603e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 0.0001849205391996052,
+      "interiorDepthToSampledModelNearestMedianMM": 3.010178270213536,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        366.2928337424232,
+        133.63171024682083,
+        525.1065674946013,
+        286.30720875875284
+      ],
+      "modelVertices": 144266,
+      "objectId": 2,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 2.307208758752836,
+      "rawDepthMedianMM": 792.0,
+      "rgbSHA256": "e6f94355740273badbe092064f3d3acf7df384408f389c152b556832a95a7e28",
+      "sampledVertices": 4096,
+      "sceneId": "000002",
+      "sourceInfoBBox": [
+        366,
+        133,
+        524,
+        284
+      ],
+      "sourcePoseZMM": 782.0375798244468,
+      "visibility": 0.9578682755153344,
+      "visibleMaskBBox": [
+        366,
+        133,
+        525,
+        285
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.998110434600042
+    },
+    {
+      "frameId": 0,
+      "frontFacingDepthAbsMedianMM": 3.9805774909469847,
+      "frontFacingDepthWithin10MM": 0.6817003628823225,
+      "frontFacingMaskedModelPoints": 1929,
+      "independentMMvsMProjectionMaxPixels": 1.1368683772161603e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 9.189059074885805e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 1.912216319804437,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        239.76797477904506,
+        266.94813899735334,
+        316.89463559625216,
+        380.284585662364
+      ],
+      "modelVertices": 59070,
+      "objectId": 4,
+      "phase": "onboarding",
+      "projectedVsInfoBBoxMaxPixels": 2.284585662364009,
+      "rawDepthMedianMM": 636.0,
+      "rgbSHA256": "afaf44ea482368164ebafc502e053044b888af324979049f2f919d7576a12251",
+      "sampledVertices": 4096,
+      "sceneId": "000003",
+      "sourceInfoBBox": [
+        240,
+        267,
+        315,
+        378
+      ],
+      "sourcePoseZMM": 682.3395750305427,
+      "visibility": 0.9830475064064657,
+      "visibleMaskBBox": [
+        240,
+        267,
+        316,
+        379
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.998395829155805
+    },
+    {
+      "frameId": 9,
+      "frontFacingDepthAbsMedianMM": 4.476292810673328,
+      "frontFacingDepthWithin10MM": 0.6568522483940042,
+      "frontFacingMaskedModelPoints": 1868,
+      "independentMMvsMProjectionMaxPixels": 1.1368683772161603e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 2.6120629836775112e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 1.8580428312307513,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        296.5551427569006,
+        278.10774172147296,
+        356.53563548876633,
+        394.322398103243
+      ],
+      "modelVertices": 59070,
+      "objectId": 4,
+      "phase": "onboarding",
+      "projectedVsInfoBBoxMaxPixels": 2.3223981032430174,
+      "rawDepthMedianMM": 624.0,
+      "rgbSHA256": "49c244f4af8882a15e3bb47ea4ba5f64b3da8b0d61a13a13a8337b10a3fc5232",
+      "sampledVertices": 4096,
+      "sceneId": "000003",
+      "sourceInfoBBox": [
+        296,
+        278,
+        355,
+        392
+      ],
+      "sourcePoseZMM": 671.5292989965264,
+      "visibility": 0.9767080745341615,
+      "visibleMaskBBox": [
+        296,
+        278,
+        356,
+        393
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9988076311605724
+    },
+    {
+      "frameId": 10,
+      "frontFacingDepthAbsMedianMM": 4.0622574380507785,
+      "frontFacingDepthWithin10MM": 0.6544117647058824,
+      "frontFacingMaskedModelPoints": 1904,
+      "independentMMvsMProjectionMaxPixels": 1.1368683772161603e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 9.040982119974709e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 2.3658268437899403,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        300.4437679397642,
+        278.43889150476303,
+        362.8863411769448,
+        395.0502061114886
+      ],
+      "modelVertices": 59070,
+      "objectId": 4,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 2.050206111488592,
+      "rawDepthMedianMM": 624.0,
+      "rgbSHA256": "40cbf4cf41e7b768468e5c074faebe193fbe0792b2de5ccf468d5f9c41eb525a",
+      "sampledVertices": 4096,
+      "sceneId": "000003",
+      "sourceInfoBBox": [
+        300,
+        278,
+        361,
+        393
+      ],
+      "sourcePoseZMM": 671.4561061859133,
+      "visibility": 0.9875168043019013,
+      "visibleMaskBBox": [
+        300,
+        278,
+        362,
+        394
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9980552314274601
+    },
+    {
+      "frameId": 159,
+      "frontFacingDepthAbsMedianMM": 3.2293493528970885,
+      "frontFacingDepthWithin10MM": 0.7771826459560792,
+      "frontFacingMaskedModelPoints": 1867,
+      "independentMMvsMProjectionMaxPixels": 8.526512829121202e-14,
+      "independentPixelObjectCameraRoundtripMaxPixels": 8.68091989484696e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 2.375691446183924,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        185.64351505253651,
+        245.59632040574692,
+        293.9100056240783,
+        346.79193098891653
+      ],
+      "modelVertices": 59070,
+      "objectId": 4,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 1.9100056240782806,
+      "rawDepthMedianMM": 680.0,
+      "rgbSHA256": "966f82aa68ca0e371040991f1768a654c0561fdfcf05935a6edcd6c84295d8ff",
+      "sampledVertices": 4096,
+      "sceneId": "000003",
+      "sourceInfoBBox": [
+        186,
+        245,
+        292,
+        345
+      ],
+      "sourcePoseZMM": 711.7177169544865,
+      "visibility": 0.963901549680948,
+      "visibleMaskBBox": [
+        186,
+        245,
+        293,
+        346
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9977302818233402
+    },
+    {
+      "frameId": 309,
+      "frontFacingDepthAbsMedianMM": 4.484146658917666,
+      "frontFacingDepthWithin10MM": 0.6177317213586644,
+      "frontFacingMaskedModelPoints": 1737,
+      "independentMMvsMProjectionMaxPixels": 5.684341886080802e-14,
+      "independentPixelObjectCameraRoundtripMaxPixels": 0.00012466644590344443,
+      "interiorDepthToSampledModelNearestMedianMM": 1.5623888500431424,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        268.34282102537395,
+        222.04035133995748,
+        338.19069652852426,
+        328.09664587699933
+      ],
+      "modelVertices": 59070,
+      "objectId": 4,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 2.0966458769993324,
+      "rawDepthMedianMM": 600.0,
+      "rgbSHA256": "41d1c0a35a2974cf035b9bb83520c86b367e82e1e34156b13e0790dd7c06452a",
+      "sampledVertices": 4096,
+      "sceneId": "000003",
+      "sourceInfoBBox": [
+        268,
+        222,
+        337,
+        326
+      ],
+      "sourcePoseZMM": 657.4161592125565,
+      "visibility": 0.988920804267542,
+      "visibleMaskBBox": [
+        268,
+        222,
+        338,
+        327
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9991701244813278
+    },
+    {
+      "frameId": 0,
+      "frontFacingDepthAbsMedianMM": 2.210895126800324,
+      "frontFacingDepthWithin10MM": 0.86524002313476,
+      "frontFacingMaskedModelPoints": 1729,
+      "independentMMvsMProjectionMaxPixels": 1.1368683772161603e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 5.825215303411492e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 2.0826766716268583,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        420.1428072953099,
+        127.68358957509281,
+        532.4738582317975,
+        254.52978192949263
+      ],
+      "modelVertices": 98608,
+      "objectId": 1,
+      "phase": "onboarding",
+      "projectedVsInfoBBoxMaxPixels": 1.5297819294926285,
+      "rawDepthMedianMM": 778.0,
+      "rgbSHA256": "91223fcff17287176c0ce0d3f1c9df239e82030c31fd4a27c8841bfc02646144",
+      "sampledVertices": 4096,
+      "sceneId": "000004",
+      "sourceInfoBBox": [
+        420,
+        128,
+        531,
+        253
+      ],
+      "sourcePoseZMM": 799.2483440442933,
+      "visibility": 0.9802048726467331,
+      "visibleMaskBBox": [
+        420,
+        128,
+        531,
+        254
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9980228781245587
+    },
+    {
+      "frameId": 9,
+      "frontFacingDepthAbsMedianMM": 2.128694036672755,
+      "frontFacingDepthWithin10MM": 0.8386363636363636,
+      "frontFacingMaskedModelPoints": 1760,
+      "independentMMvsMProjectionMaxPixels": 2.2737367544323206e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 0.00012787861261006678,
+      "interiorDepthToSampledModelNearestMedianMM": 2.3667812330786075,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        418.12617372208405,
+        160.3990381612851,
+        549.1010170056791,
+        287.3115166230466
+      ],
+      "modelVertices": 98608,
+      "objectId": 1,
+      "phase": "onboarding",
+      "projectedVsInfoBBoxMaxPixels": 2.3115166230466,
+      "rawDepthMedianMM": 722.0,
+      "rgbSHA256": "ca9d21cc98c0959731ebc6d5199aec4c7b85bace806fa26d75e82a68f061e0f0",
+      "sampledVertices": 4096,
+      "sceneId": "000004",
+      "sourceInfoBBox": [
+        418,
+        160,
+        547,
+        285
+      ],
+      "sourcePoseZMM": 747.8768540879719,
+      "visibility": 0.9868501904878948,
+      "visibleMaskBBox": [
+        418,
+        160,
+        548,
+        286
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9978829389788294
+    },
+    {
+      "frameId": 10,
+      "frontFacingDepthAbsMedianMM": 2.109707051800342,
+      "frontFacingDepthWithin10MM": 0.8393991912189486,
+      "frontFacingMaskedModelPoints": 1731,
+      "independentMMvsMProjectionMaxPixels": 1.1368683772161603e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 0.00010662283327118919,
+      "interiorDepthToSampledModelNearestMedianMM": 2.2084073009011003,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        417.33690692296074,
+        163.70096737467532,
+        549.9538223747273,
+        290.48239052465675
+      ],
+      "modelVertices": 98608,
+      "objectId": 1,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 1.9538223747273378,
+      "rawDepthMedianMM": 717.0,
+      "rgbSHA256": "653eda19a5e22eb5cb72bfd1bda26a952041071709fad3d1c3c792f738eb7b8e",
+      "sampledVertices": 4096,
+      "sceneId": "000004",
+      "sourceInfoBBox": [
+        417,
+        164,
+        548,
+        289
+      ],
+      "sourcePoseZMM": 743.5002730861122,
+      "visibility": 0.9868597152938313,
+      "visibleMaskBBox": [
+        417,
+        164,
+        549,
+        290
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9987671063987178
+    },
+    {
+      "frameId": 159,
+      "frontFacingDepthAbsMedianMM": 2.6346332169783864,
+      "frontFacingDepthWithin10MM": 0.8421665695981363,
+      "frontFacingMaskedModelPoints": 1717,
+      "independentMMvsMProjectionMaxPixels": 1.1368683772161603e-13,
+      "independentPixelObjectCameraRoundtripMaxPixels": 7.220781530517787e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 2.6951317602297395,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        394.00976181426876,
+        94.23868794073721,
+        498.3346395993346,
+        227.55762998998338
+      ],
+      "modelVertices": 98608,
+      "objectId": 1,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 2.3346395993345936,
+      "rawDepthMedianMM": 854.0,
+      "rgbSHA256": "428d2da11bb288e532551a0ae094d68fc714a64c022f1e50fe16be5e87fd9d94",
+      "sampledVertices": 4096,
+      "sceneId": "000004",
+      "sourceInfoBBox": [
+        394,
+        94,
+        496,
+        226
+      ],
+      "sourcePoseZMM": 860.8780008065318,
+      "visibility": 0.9820349761526233,
+      "visibleMaskBBox": [
+        394,
+        94,
+        497,
+        227
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.9980573093734822
+    },
+    {
+      "frameId": 309,
+      "frontFacingDepthAbsMedianMM": 3.108110777478032,
+      "frontFacingDepthWithin10MM": 0.7513043478260869,
+      "frontFacingMaskedModelPoints": 1725,
+      "independentMMvsMProjectionMaxPixels": 5.684341886080802e-14,
+      "independentPixelObjectCameraRoundtripMaxPixels": 7.12940010404889e-05,
+      "interiorDepthToSampledModelNearestMedianMM": 1.966558858111759,
+      "manualInteriorDepthPoints": 32,
+      "modelProjectedBBox": [
+        287.82383843774454,
+        210.29928724985623,
+        401.0522645085529,
+        371.83802507062717
+      ],
+      "modelVertices": 98608,
+      "objectId": 1,
+      "phase": "evaluation",
+      "projectedVsInfoBBoxMaxPixels": 2.0522645085529234,
+      "rawDepthMedianMM": 583.0,
+      "rgbSHA256": "0899c201b8de176d9ec0e55b3442fbd0bfa50f3f41a64062d3602d28da77d1a2",
+      "sampledVertices": 4096,
+      "sceneId": "000004",
+      "sourceInfoBBox": [
+        288,
+        209,
+        399,
+        370
+      ],
+      "sourcePoseZMM": 625.3857351776833,
+      "visibility": 0.9900625374796539,
+      "visibleMaskBBox": [
+        288,
+        209,
+        400,
+        371
+      ],
+      "visibleMaskInsideProjectedConvexHull": 0.998529030025093
+    }
+  ],
+  "schema": "visualizeit-hb-protocol-audit/1",
+  "scope": {
+    "geometryObjects": [
+      20,
+      2,
+      4,
+      1
+    ],
+    "imageSamples": 20,
+    "objectTracks": 12,
+    "sampleFrameIds": [
+      0,
+      9,
+      10,
+      159,
+      309
+    ],
+    "scenes": [
+      "000001",
+      "000002",
+      "000003",
+      "000004"
+    ],
+    "uniqueScoredObjectFrames": 3600,
+    "uniqueSourceRGBFrames": 1240
+  },
+  "scriptSHA256": "697cc4bd9d67fc21dd5498ca9944248766de8df3874b8197d5b40d7f6188312e",
+  "sourceFormat": "https://github.com/thodan/bop_toolkit/blob/master/docs/bop_datasets_format.md",
+  "sourceJoinsVerified": 3720,
+  "testedDepthScales": [
+    1.0
+  ],
+  "testedImageSizes": [
+    [
+      640,
+      480
+    ]
+  ],
+  "testedIntrinsics": [
+    [
+      537.4799,
+      0.0,
+      318.8965,
+      0.0,
+      536.1447,
+      238.3781,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ]
+}
