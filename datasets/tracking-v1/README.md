@@ -4,6 +4,13 @@ This is an **initialized rigid-object tracking** dataset and benchmark, not an
 object detector benchmark. No private phone recordings or user photographs are
 included. Real recordings and synthetic stress cases are reported separately.
 
+> **Protocol correction:** the first full 8,160-frame benchmark uses a shared
+> **simplified initialization** (depth backprojection, at most 3,000 ORB anchors).
+> Production tracker update implementations are unchanged, but these numbers are
+> **not a full-production-pipeline benchmark**. The original mesh-raycast/all-feature
+> initialization must be evaluated separately; this first simplified protocol
+> alone cannot establish full-pipeline or algorithm quality.
+
 | Corpus | Object-sequences | Scored object-frames | Evidence |
 |---|---:|---:|---|
 | Synthetic stress v1 | 24 | 4,560 | Procedural RGB-D, exact geometric reference poses, eight stress scenarios × three fixed texture/geometry seeds |
@@ -120,3 +127,5 @@ The current native trained GoTrack bridge is a **different pipeline**. This VM's
 readiness probe found no Torch, installed weights or reviewed operator admission,
 and no NVIDIA GPU was detected. No trained-GoTrack, SAM, native iOS, live phone,
 HTTP deployment or model-adaptation performance is claimed by these results.
+
+The auxiliary `addPass` threshold uses 0.1 × the bounding-box diagonal of the deterministic vertex sample, not the true/full model diameter or official BOP ADD-0.1D. The primary metric is strictly `<5` native pixels. Frozen hashes cover named core sources and package versions, not every runtime binary.

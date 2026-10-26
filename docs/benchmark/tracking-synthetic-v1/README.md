@@ -1,4 +1,6 @@
-# Sealed synthetic tracking results, 2026-10-26
+# Sealed synthetic tracking results — simplified initialization, 2026-10-26
+
+> **Shared simplified initialization; not the full production pipeline.** The exact production update methods receive a capped depth-backprojected bank, not the default mesh-raycast/all-feature bank. Original-initialization benchmarks are separate and cannot be inferred from this table.
 
 Completed 24 sequences ×190 scored frames ×3 repeated runs ×3 exact systems. These are controlled synthetic tests, not trained GoTrack, real-world generalization or live-phone performance. The real corpus is still running; it will be reported separately.
 

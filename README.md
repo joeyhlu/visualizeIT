@@ -8,6 +8,11 @@ An initialized geometric tracking prototype includes a local frame-processing se
 
 ## CPU tracking regression benchmark
 
+The first full comparison uses **shared simplified initialization**, not the
+full production pipeline. Original mesh-raycast initialization is being checked
+separately; do not infer production readiness or failure solely from that first
+comparison.
+
 A portable CPU-only harness compares the exact historical rigid tracker with
 the current rigid tracker and production stream wrapper on variable-length
 sequences. The versioned dataset has 3,600 real HB reference-labeled scored
