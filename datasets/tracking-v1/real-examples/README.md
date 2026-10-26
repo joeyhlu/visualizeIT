@@ -32,5 +32,4 @@ Recreate this committed example/annotation subset:
     python -m bench.tracking_real_data examples --output .cache/tracking-benchmark/real-v1 --examples-output datasets/tracking-v1/real-examples
 
 The full 1.4 GiB resource corpus is not embedded as Git blobs. A separate complete
-717 MB compressed media archive was prepared locally; publishing it requires a
-separate verified GitHub Release upload. No private/user media is included.
+717 MB compressed media archive is now [published as a verified GitHub research prerelease asset](https://github.com/joeyhlu/visualizeIT/releases/download/tracking-dataset-v1/visualizeit-hb-tracking-v1.tar.gz). Uploaded size and GitHub-computed SHA-256 match the source archive. No private/user media is included.

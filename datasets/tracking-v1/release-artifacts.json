@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "prepared_locally_not_uploaded",
+  "status": "published_github_prerelease",
   "publicationBlockers": [],
   "artifacts": [
     {
@@ -9,7 +9,10 @@
       "bytes": 166926672,
       "sha256": "97b366af638787eb50ba32304f9d6f1ef35187490a2260e4dc25a0b0517e1b83",
       "license": "CC0-1.0",
-      "evidenceKind": "synthetic_stress"
+      "evidenceKind": "synthetic_stress",
+      "downloadURL": "https://github.com/joeyhlu/visualizeIT/releases/download/tracking-dataset-v1/visualizeit-synthetic-tracking-v1.tar.gz",
+      "githubDigest": "sha256:97b366af638787eb50ba32304f9d6f1ef35187490a2260e4dc25a0b0517e1b83",
+      "verifiedUploadedBytes": 166926672
     },
     {
       "filename": "visualizeit-hb-tracking-v1.tar.gz",
@@ -17,9 +20,14 @@
       "bytes": 716943901,
       "sha256": "32337bb7a545b4fd313c980ff813fa99bd8b3e653b3dbdc4e39e5c67c9301ada",
       "license": "CC0-1.0",
-      "evidenceKind": "real_dataset_reference"
+      "evidenceKind": "real_dataset_reference",
+      "downloadURL": "https://github.com/joeyhlu/visualizeIT/releases/download/tracking-dataset-v1/visualizeit-hb-tracking-v1.tar.gz",
+      "githubDigest": "sha256:32337bb7a545b4fd313c980ff813fa99bd8b3e653b3dbdc4e39e5c67c9301ada",
+      "verifiedUploadedBytes": 716943901
     }
   ],
   "containsPrivateWeightsOrUserPhotos": false,
-  "publicationNote": "New user-approved GitHub CLI OAuth verified; draft/research dataset publication and asset verification in progress. Private weights and configs excluded."
+  "publicationNote": "Published dataset-only research prerelease, not latest/production. GitHub asset sizes and computed SHA256 digests independently matched the local archives. Main was not merged or deployed.",
+  "releaseURL": "https://github.com/joeyhlu/visualizeIT/releases/tag/tracking-dataset-v1",
+  "tagCommit": "c10cb8b0dd464b5f12e892c0f2c277569ae872be"
 }

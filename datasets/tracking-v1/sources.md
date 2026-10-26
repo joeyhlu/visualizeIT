@@ -85,6 +85,8 @@ The package includes every locked real resource, both manifests, the lock and
 selection, and a CC0 attribution/integrity README. Archive headers have fixed
 ownership, mode and time; gzip has no source filename and mtime=0. A neighboring
 JSON receipt records its size/SHA-256. Packaging does **not** upload anything.
-The local full-media package was prepared; GitHub Release upload remains a
-separate publishing step. Do not describe the raw media as GitHub-hosted until
-the uploaded asset URL/hash have been verified.
+The complete 716,943,901-byte archive is now
+[published on GitHub](https://github.com/joeyhlu/visualizeIT/releases/download/tracking-dataset-v1/visualizeit-hb-tracking-v1.tar.gz).
+GitHub's computed SHA-256 matches
+`32337bb7a545b4fd313c980ff813fa99bd8b3e653b3dbdc4e39e5c67c9301ada`.
+This is a dataset-only research prerelease, not an application release or merge.

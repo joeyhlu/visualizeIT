@@ -32,13 +32,14 @@ limitations; [sources](sources.md) documents real-data provenance and license.
   pack are included when acquisition completes.
 - Benchmark source, regression tests and measured result/provenance summaries.
 
-The full **RGB/depth/mask media archives are prepared locally for GitHub Release
-upload**; they are not silently embedded as large Git history blobs. At the time
-of initial publication, the connected GitHub API cannot upload Release assets and
-the browser is logged out. Therefore a recipe/label pack is **not represented as
-already-uploaded full footage**. The final benchmark report records archive
-names, sizes, hashes and actual upload status. Regeneration/acquisition below is
-available without private credentials.
+The full **RGB/depth/mask media archives are now published** in the
+[dataset-only GitHub research prerelease](https://github.com/joeyhlu/visualizeIT/releases/tag/tracking-dataset-v1),
+not embedded as large Git history blobs. Both uploaded byte counts and GitHub's
+computed SHA-256 digests match the local archives; see
+[`release-artifacts.json`](release-artifacts.json) for verified links, sizes and
+checksums. The release points to benchmark commit `c10cb8b`; later benchmark-only
+report commits do not change the frozen dataset or inference source hashes.
+Regeneration/acquisition below remains available without private credentials.
 
 ## Reproduce on a CPU VM
 

@@ -36,10 +36,9 @@ in onboarding and evaluation; it does not secretly change object identity.
 
 The full 14,400 PNG RGB/depth/mask files are generated locally into the ignored
 cache, **not included as Git blobs**. A complete-media `.tar.gz` release archive has been
-prepared locally; its upload as a GitHub Release asset is pending authenticated
-publishing access. See `synthetic-release.json` for the exact local asset hash
-and size. Do not describe the full RGB-D media as uploaded until a downloadable
-release URL has been verified. The annotations are the full dataset labels,
+[published as a GitHub research prerelease asset](https://github.com/joeyhlu/visualizeIT/releases/download/tracking-dataset-v1/visualizeit-synthetic-tracking-v1.tar.gz).
+Its uploaded size and GitHub-computed SHA-256 match the local archive; see
+`synthetic-release.json`. The annotations are the full dataset labels,
 not placeholder/random score rows. Hashes pin media identity for the documented
 runtime; PNG encoding can differ with different Pillow/zlib versions, so use the
 benchmark's pinned environment and verify the regenerated manifest hashes.
