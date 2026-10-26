@@ -1,0 +1,87 @@
+{
+  "annotationPacks": [
+    {
+      "bytes": 219903,
+      "expandedBytes": 2495388,
+      "expandedSHA256": "1bdc84f5865797c308c2a46dad67c90f532ecb3e963ac5713b80acd820831af4",
+      "filename": "inference.json.gz",
+      "sha256": "077a4e0da7dbeb341ee09c6adf48e17807087a756ab6e7cce6f1c565b4ae79ad"
+    },
+    {
+      "bytes": 975258,
+      "expandedBytes": 6990665,
+      "expandedSHA256": "1fc8fe971bf000c244b35d8416d473684f826fe756ae91dea2e2a41b861d9956",
+      "filename": "evaluator.json.gz",
+      "sha256": "891f3c7dbbb8d39cfb351e3f6358a65961dec0b46a42972a508757d6855e6ddf"
+    }
+  ],
+  "authors": "Roman Kaskman, Ivan Shugurov, Sergey Zakharov, Slobodan Ilic (HomebrewedDB, ICCVW 2019); BOP conversion by the BOP authors",
+  "contactSheet": {
+    "filename": "contact-sheet.jpg",
+    "sha256": "5d07dec0090a3d41eb3193c25ed10ae3a0932be28b37d09958d765b6538cec29",
+    "transformation": "RGB start/end examples resized to 320x240 thumbnails, labeled, JPEG quality 90; not used for metrics"
+  },
+  "datasetRevision": "985ebaef7b1bd4bffb2039f18dd81faa647fd060",
+  "disclosure": "Eight actual RGB example images and complete compressed inference/evaluator annotation manifests are in Git. Full RGB/depth/mask/model media remain in the pinned acquisition corpus and separate full-media package.",
+  "images": [
+    {
+      "bytes": 923627,
+      "filename": "scene-000001-frame-000000.png",
+      "member": "val_primesense/000001/rgb/000000.png",
+      "role": "annotated_onboarding_example",
+      "sha256": "785017dc100a0c8f1dc497bb1a0dea0da14ab9e6f009ba49a51bc542e601a4c6"
+    },
+    {
+      "bytes": 923627,
+      "filename": "scene-000001-frame-000309.png",
+      "member": "val_primesense/000001/rgb/000309.png",
+      "role": "scored_evaluation_example",
+      "sha256": "0a5da44b2bf77b6457c9de8f9048d5b012748841102feae06c17c89adbb12808"
+    },
+    {
+      "bytes": 923627,
+      "filename": "scene-000002-frame-000000.png",
+      "member": "val_primesense/000002/rgb/000000.png",
+      "role": "annotated_onboarding_example",
+      "sha256": "dbb7058b17c25850f611fb112d43903c0597c1bd36433723bf64a13b2d0a09f8"
+    },
+    {
+      "bytes": 923627,
+      "filename": "scene-000002-frame-000309.png",
+      "member": "val_primesense/000002/rgb/000309.png",
+      "role": "scored_evaluation_example",
+      "sha256": "e6f94355740273badbe092064f3d3acf7df384408f389c152b556832a95a7e28"
+    },
+    {
+      "bytes": 923632,
+      "filename": "scene-000003-frame-000000.png",
+      "member": "val_primesense/000003/rgb/000000.png",
+      "role": "annotated_onboarding_example",
+      "sha256": "afaf44ea482368164ebafc502e053044b888af324979049f2f919d7576a12251"
+    },
+    {
+      "bytes": 923632,
+      "filename": "scene-000003-frame-000309.png",
+      "member": "val_primesense/000003/rgb/000309.png",
+      "role": "scored_evaluation_example",
+      "sha256": "41d1c0a35a2974cf035b9bb83520c86b367e82e1e34156b13e0790dd7c06452a"
+    },
+    {
+      "bytes": 923632,
+      "filename": "scene-000004-frame-000000.png",
+      "member": "val_primesense/000004/rgb/000000.png",
+      "role": "annotated_onboarding_example",
+      "sha256": "91223fcff17287176c0ce0d3f1c9df239e82030c31fd4a27c8841bfc02646144"
+    },
+    {
+      "bytes": 923632,
+      "filename": "scene-000004-frame-000309.png",
+      "member": "val_primesense/000004/rgb/000309.png",
+      "role": "scored_evaluation_example",
+      "sha256": "0899c201b8de176d9ec0e55b3442fbd0bfa50f3f41a64062d3602d28da77d1a2"
+    }
+  ],
+  "license": "CC0-1.0",
+  "schemaVersion": 1,
+  "source": "https://bop.felk.cvut.cz/datasets/#HB"
+}

@@ -1,0 +1,16 @@
+VisualizeIT synthetic rigid-tracking stress corpus v1
+
+The procedurally generated dataset images, source geometry, annotations,
+manifest, and contact-sheet artifacts in this corpus are dedicated to the public
+domain under Creative Commons CC0 1.0 Universal.
+
+License and legal code: https://creativecommons.org/publicdomain/zero/1.0/
+https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+This notice applies only to the newly generated synthetic dataset artifacts.
+It does not grant or change licenses for other repository source code, third-party
+libraries, pretrained weights, or external real-world datasets. No external
+imagery or scanned models is included in the synthetic corpus.
+
+The data are provided without warranty. Every image is synthetic; the corpus
+must not be represented as real recordings or independent human annotations.

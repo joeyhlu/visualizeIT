@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "status": "prepared_locally_not_uploaded",
+  "publicationBlockers": [
+    "GitHub branch/blob connector writes returned 403 Resource not accessible by integration despite repository user push permission",
+    "GitHub Release upload is not exposed by the connected API; CLI unauthenticated and browser logged out"
+  ],
+  "artifacts": [
+    {
+      "filename": "visualizeit-synthetic-tracking-v1.tar.gz",
+      "localRelativePath": "artifacts/tracking-benchmark/releases/visualizeit-synthetic-tracking-v1.tar.gz",
+      "bytes": 166926672,
+      "sha256": "97b366af638787eb50ba32304f9d6f1ef35187490a2260e4dc25a0b0517e1b83",
+      "license": "CC0-1.0",
+      "evidenceKind": "synthetic_stress"
+    },
+    {
+      "filename": "visualizeit-hb-tracking-v1.tar.gz",
+      "localRelativePath": "artifacts/tracking-benchmark/releases/visualizeit-hb-tracking-v1.tar.gz",
+      "bytes": 716943901,
+      "sha256": "32337bb7a545b4fd313c980ff813fa99bd8b3e653b3dbdc4e39e5c67c9301ada",
+      "license": "CC0-1.0",
+      "evidenceKind": "real_dataset_reference"
+    }
+  ],
+  "containsPrivateWeightsOrUserPhotos": false
+}
