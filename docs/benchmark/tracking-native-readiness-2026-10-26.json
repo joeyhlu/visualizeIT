@@ -23,5 +23,7 @@
   "torchInstalled": false,
   "nvidiaSmiPresent": false,
   "downloadedWeights": [],
-  "scope": "Read-only readiness probe; no model load, network listener or phone upload"
+  "scope": "Read-only readiness probe; no model load, network listener or phone upload",
+  "probePhase": "initial_unconfigured_geometric_venv_before_isolated_private_model_restore",
+  "followupEvidence": "tracking-neural-cpu-v1/summary.json validates later isolated CPU model execution; full workbench serving admission remains separate"
 }

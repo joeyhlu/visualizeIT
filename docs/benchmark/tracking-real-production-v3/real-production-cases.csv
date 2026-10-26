@@ -1,0 +1,37 @@
+scenario,scene_id,object_id,system,label,initialization_mode,visible_reprojection_coverage_percent,all_frame_public_pose_availability_percent,update_fps,unique_scored_frames,measured_repeats
+HB scene000001 object20,000001,20,original_rigid,Original rigid (df788084),production_mesh,6.666666666666667,14.666666666666666,16.259863446594434,300,1
+HB scene000001 object20,000001,20,current_rigid,Current rigid,production_mesh,5.666666666666667,5.666666666666667,15.421357531292161,300,1
+HB scene000001 object20,000001,20,current_prototype,Current stream wrapper,production_mesh,5.666666666666667,5.666666666666667,15.354954943361586,300,1
+HB scene000001 object28,000001,28,original_rigid,Original rigid (df788084),production_mesh,2.6666666666666665,2.6666666666666665,24.46471840371394,300,1
+HB scene000001 object28,000001,28,current_rigid,Current rigid,production_mesh,3.3333333333333335,3.3333333333333335,23.804813201589877,300,1
+HB scene000001 object28,000001,28,current_prototype,Current stream wrapper,production_mesh,3.3333333333333335,3.3333333333333335,23.299342122192655,300,1
+HB scene000001 object33,000001,33,original_rigid,Original rigid (df788084),production_mesh,3.0927835051546393,3.0,76.87203137110885,300,1
+HB scene000001 object33,000001,33,current_rigid,Current rigid,production_mesh,3.0927835051546393,3.0,76.49755146626913,300,1
+HB scene000001 object33,000001,33,current_prototype,Current stream wrapper,production_mesh,3.0927835051546393,3.0,71.74363785057844,300,1
+HB scene000002 object2,000002,2,original_rigid,Original rigid (df788084),production_mesh,4.0,4.0,13.124135362266198,300,1
+HB scene000002 object2,000002,2,current_rigid,Current rigid,production_mesh,2.0,2.0,12.561340727649057,300,1
+HB scene000002 object2,000002,2,current_prototype,Current stream wrapper,production_mesh,2.0,2.0,13.050617650048123,300,1
+HB scene000002 object7,000002,7,original_rigid,Original rigid (df788084),production_mesh,3.3333333333333335,3.6666666666666665,52.760981196255585,300,1
+HB scene000002 object7,000002,7,current_rigid,Current rigid,production_mesh,3.3333333333333335,3.6666666666666665,51.38857854025304,300,1
+HB scene000002 object7,000002,7,current_prototype,Current stream wrapper,production_mesh,3.3333333333333335,3.6666666666666665,51.86816944351573,300,1
+HB scene000002 object21,000002,21,original_rigid,Original rigid (df788084),production_mesh,3.741496598639456,5.333333333333333,21.253709613044453,300,1
+HB scene000002 object21,000002,21,current_rigid,Current rigid,production_mesh,3.741496598639456,6.0,21.20796845540484,300,1
+HB scene000002 object21,000002,21,current_prototype,Current stream wrapper,production_mesh,3.741496598639456,6.0,20.490632412603073,300,1
+HB scene000003 object4,000003,4,original_rigid,Original rigid (df788084),production_mesh,3.4482758620689653,6.0,29.65978126820858,300,1
+HB scene000003 object4,000003,4,current_rigid,Current rigid,production_mesh,3.4482758620689653,6.0,29.217040375934623,300,1
+HB scene000003 object4,000003,4,current_prototype,Current stream wrapper,production_mesh,3.4482758620689653,6.0,29.28456217135484,300,1
+HB scene000003 object9,000003,9,original_rigid,Original rigid (df788084),production_mesh,0.36101083032490977,0.3333333333333333,59.7348857889152,300,1
+HB scene000003 object9,000003,9,current_rigid,Current rigid,production_mesh,0.36101083032490977,0.3333333333333333,58.18411749394028,300,1
+HB scene000003 object9,000003,9,current_prototype,Current stream wrapper,production_mesh,0.36101083032490977,0.3333333333333333,58.325862832014266,300,1
+HB scene000003 object19,000003,19,original_rigid,Original rigid (df788084),production_mesh,4.333333333333333,6.333333333333333,74.67691798712754,300,1
+HB scene000003 object19,000003,19,current_rigid,Current rigid,production_mesh,4.333333333333333,6.333333333333333,73.88032412800074,300,1
+HB scene000003 object19,000003,19,current_prototype,Current stream wrapper,production_mesh,4.333333333333333,6.333333333333333,73.99577125515961,300,1
+HB scene000004 object1,000004,1,original_rigid,Original rigid (df788084),production_mesh,5.0,5.0,44.66154509524823,300,1
+HB scene000004 object1,000004,1,current_rigid,Current rigid,production_mesh,5.0,5.0,44.91847842373154,300,1
+HB scene000004 object1,000004,1,current_prototype,Current stream wrapper,production_mesh,5.0,5.0,44.53646018903891,300,1
+HB scene000004 object16,000004,16,original_rigid,Original rigid (df788084),production_mesh,12.371134020618557,12.666666666666666,48.22095278016265,300,1
+HB scene000004 object16,000004,16,current_rigid,Current rigid,production_mesh,12.027491408934708,13.333333333333334,47.17686839416642,300,1
+HB scene000004 object16,000004,16,current_prototype,Current stream wrapper,production_mesh,12.027491408934708,13.333333333333334,46.93042316524912,300,1
+HB scene000004 object17,000004,17,original_rigid,Original rigid (df788084),production_mesh,9.215017064846416,11.333333333333334,37.78222302373479,300,1
+HB scene000004 object17,000004,17,current_rigid,Current rigid,production_mesh,7.849829351535837,9.666666666666666,36.84689350144487,300,1
+HB scene000004 object17,000004,17,current_prototype,Current stream wrapper,production_mesh,7.849829351535837,9.666666666666666,35.673595320025704,300,1

@@ -21,7 +21,7 @@ import time
 import numpy as np
 from PIL import Image
 
-from .prototype_benchmark import digest, write_json, inference_packet
+from .prototype_benchmark import digest, write_json, inference_packet, build_bank
 from .prototype_tracking import PrototypeTrackerV1
 from .tracker import RigidTracker
 from .ply_model import read_ply
@@ -178,7 +178,9 @@ def update_tracker(system, tracker, record, rgb, obj, session, index):
 def source_hashes():
     return {name: digest(ROOT / name) for name in (
         'bench/tracking_benchmark.py', 'bench/tracker.py', 'bench/prototype_tracking.py',
-        'bench/vision.py', 'bench/prototype_benchmark.py', 'bench/ply_model.py')}
+        'bench/vision.py', 'bench/prototype_benchmark.py', 'bench/ply_model.py',
+        'bench/renderer.py', 'bench/model.py', 'bench/obj_model.py',
+        'bench/tracking_production_banks.py')}
 
 
 def hardware():
@@ -193,17 +195,23 @@ def hardware():
         note='Shared CPU VM; elapsed time is environment-specific, not live-phone FPS')
 
 
-def run_inference(dataset, output, systems=SYSTEMS, repeats=3, warmup=20, limit=None):
+def run_inference(dataset, output, systems=SYSTEMS, repeats=3, warmup=20, limit=None,
+                  initialization='depth_budget', max_scored_frames=None, bank_cache=None):
     dataset, output = Path(dataset), Path(output)
     if output.exists():
         raise ValueError('Choose a fresh output directory; previous trials are immutable')
     if (repeats < 1 or warmup < 0 or not systems or set(systems) - set(SYSTEMS)
-            or len(systems) != len(set(systems)) or (limit is not None and limit < 1)):
+            or len(systems) != len(set(systems)) or (limit is not None and limit < 1)
+            or initialization not in ('depth_budget', 'production_mesh')
+            or (max_scored_frames is not None and max_scored_frames < 1)
+            or (bank_cache is not None and initialization != 'production_mesh')):
         raise ValueError('Invalid benchmark configuration')
     manifest_path = dataset / 'inference.json'
     manifest = json_read(manifest_path)
     validate_manifest(manifest)
     objects = manifest['objects'][:limit] if limit else manifest['objects']
+    if max_scored_frames is not None:
+        objects = [dict(obj, frames=obj['frames'][:max_scored_frames]) for obj in objects]
     cv2.setNumThreads(1)
     cv2.setRNGSeed(17)
     output.mkdir(parents=True)
@@ -213,10 +221,15 @@ def run_inference(dataset, output, systems=SYSTEMS, repeats=3, warmup=20, limit=
         sourceHashes=source_hashes(), historicalCommit=HISTORICAL_COMMIT,
         historicalTrackerSHA256=HISTORICAL_SHA256, hardware=hardware(),
         configuration=dict(systems=list(systems), repeats=repeats, warmupFrames=warmup,
-            initialization='ten annotated masked RGB-D frames; ORB depth-backprojected immutable bank; first 300 detector features per view, <=3000 anchors',
+            initializationMode=initialization,
+            initialization=('ten annotated RGB-D/pose frames; exact production prototype_benchmark.build_bank mesh-ray intersections; ORB nfeatures=2000 per view, no extra cap'
+                if initialization == 'production_mesh' else
+                'SIMPLIFIED initialization: ten annotated masked RGB-D frames; ORB depth-backprojected immutable bank; first 300 detector features per view, <=3000 anchors'),
             runtime='serial systems and sequences; OpenCV one thread; no detector/neural fallback',
             thresholds=dict(accurateReprojectionPixels=5., visibleFraction=.5,
-                            addFractionOfDiameter=.1), limitSequences=limit),
+                            addFractionOfSampledBoundingBoxDiagonal=.1), limitSequences=limit,
+            maxScoredFrames=max_scored_frames, bankCacheEnabled=bank_cache is not None,
+            bankCachePolicy='Hash-bound exact production builder outputs; preparation does not overlap measured tracker timing; original build seconds recorded separately' if bank_cache else None),
         evaluatorOpenedDuringInference=False)
     write_json(output / 'freeze.json', frozen)
     results = []
@@ -225,11 +238,35 @@ def run_inference(dataset, output, systems=SYSTEMS, repeats=3, warmup=20, limit=
         sequence_start = time.perf_counter()
         try:
             start = time.perf_counter()
-            _, model, _ = read_ply(checked_path(dataset, obj['model']), obj['name'])
-            bank = build_depth_bank(dataset, obj)
+            scan, model, transform = read_ply(checked_path(dataset, obj['model']), obj['name'])
+            if initialization == 'production_mesh':
+                if bank_cache is not None:
+                    from .tracking_production_banks import load_bank
+                    entry = load_bank(dataset, bank_cache, obj['objectId'])
+                    if entry.metadata['helperSourceSHA256'] != digest(ROOT / 'bench/tracking_production_banks.py'):
+                        raise ValueError('Cached production-bank helper source differs')
+                    sequence['bankCacheMetadataSHA256'] = entry.metadata['metadataSHA256']
+                    sequence['bankCacheStatus'] = entry.metadata['status']
+                    sequence['bankSourceBuildSeconds'] = entry.metadata['sourceBuildSeconds']
+                    if entry.arrays is None:
+                        raise ValueError('cached_exact_production_builder_failure: ' + entry.metadata['failure'])
+                    bank = entry.arrays
+                else:
+                    bank = build_bank(dataset, obj['onboarding'], scan.original, transform)
+                if len(bank[0]) < 12:
+                    raise ValueError('insufficient_onboarding_references')
+            else:
+                bank = build_depth_bank(dataset, obj)
             sequence['initializationSeconds'] = time.perf_counter() - start
             sequence['anchors'] = len(bank[0])
+            sequence['seedViewAnchors'] = len(bank[3])
             sequence['bankSHA256'] = hashlib.sha256(b''.join(np.ascontiguousarray(a).tobytes() for a in bank)).hexdigest()
+            bank_relative = f'object-{obj["objectId"]:06d}/reference-bank.npz'
+            bank_path = output / bank_relative
+            bank_path.parent.mkdir(parents=True, exist_ok=True)
+            np.savez_compressed(bank_path, referencePoints=bank[0], referenceDescriptors=bank[1],
+                                previousGray=bank[2], seedPixels=bank[3], seedPoints=bank[4])
+            sequence['bankArtifact'] = dict(path=bank_relative, sha256=digest(bank_path))
             seed_rgb = load_rgb(dataset, obj['onboarding'][-1])
         except Exception as exc:
             sequence['initializationFailure'] = f'{type(exc).__name__}: {exc}'
@@ -386,6 +423,7 @@ def score_rows(records, rows, points):
         hiddenPublicPoseFrames=false_public, longestAccurateVisibleRun=longest,
         failures=dict(Counter(r.get('failureReason', r.get('reason')) for r in rows if r['state'] != 'tracking')),
         recovery=recovery, modelBoundingBoxDiagonalMetres=diameter,
+        boundingBoxScope='deterministic sampled vertices, not true/full model diameter or official BOP ADD threshold',
         metricScope='Dataset-reference full-model corresponding-point pose errors; no symmetry matching, no independently annotated physical attachment or live-camera claim')
     for name, values in [('reprojectionPixels', errors), ('addMetres', additions),
                          ('rotationDegrees', rotations), ('translationMetres', translations)]:
@@ -415,6 +453,8 @@ def run_evaluation(dataset, output):
     reports = []
     for binding in seal['geometryBindings']:
         obj = by_id[binding['objectId']]
+        if seal['configuration'].get('maxScoredFrames') is not None:
+            obj = dict(obj, frames=obj['frames'][:seal['configuration']['maxScoredFrames']])
         joined = dict(objectId=obj['objectId'], model=obj['model'],
             frames=[dict(frameId=r['frameId'], rgb=r['rgb'], calibration=r['calibration']) for r in obj['frames']])
         if joined != binding:
@@ -475,9 +515,15 @@ def main():
             p.add_argument('--repeats', type=int, default=3)
             p.add_argument('--warmup', type=int, default=20)
             p.add_argument('--limit-sequences', type=int)
+            p.add_argument('--initialization', choices=('depth_budget', 'production_mesh'),
+                           default='depth_budget')
+            p.add_argument('--max-scored-frames', type=int)
+            p.add_argument('--bank-cache', type=Path,
+                           help='Verified exact production banks, prepared before timing; never used for simplified mode')
     args = parser.parse_args()
     if args.stage == 'infer':
-        run_inference(args.dataset, args.output, args.systems, args.repeats, args.warmup, args.limit_sequences)
+        run_inference(args.dataset, args.output, args.systems, args.repeats, args.warmup,
+                      args.limit_sequences, args.initialization, args.max_scored_frames, args.bank_cache)
     else:
         run_evaluation(args.dataset, args.output)
 

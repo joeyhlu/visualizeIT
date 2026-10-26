@@ -87,6 +87,11 @@ PARITY_SCHEMA = "workbench_fullimage_head_parity_v1"
 GEOMETRY_SCHEMA = "workbench_metric_geometry_validation_v1"
 CONTRACT_SCHEMA = "workbench_integer_metric_contract_v1"
 ADMISSION_SCHEMA = "workbench_serving_admission_v1"
+RECORDED_ARTIFACT_SCHEMA = "workbench_fresh_recorded_artifact_v1"
+RECORDED_EXECUTION_SCOPE = "finite_recorded_only"
+RECORDED_LINEAGE = "fresh_local_pinned_artifact_verification_not_historical_receipts"
+CONFIG_METADATA_VERIFICATION = "identity_crossbound_in_authenticated_export_and_reference_metadata"
+CONFIG_DICTIONARY_VERIFICATION = "canonical_dictionary_and_authenticated_export_and_reference_metadata"
 CONFIDENCE_THRESHOLD = 0.3
 SAMPLING_MAX_ERROR_PX = 1e-3
 
@@ -102,6 +107,7 @@ NEW_SOURCES = (
     "bench/workbench_cli.py", "bench/workbench_telemetry.py", "bench/workbench_render.py", RECORD_RELATIVE,
     "bench/workbench_reconstruction.py",  # CLI failure records call its bounded-text helpers.
     "bench/workbench_frame_boundary.py",  # the CLI executes every neural frame through this boundary.
+    "bench/workbench_live_pose.py",  # explicitly rejects fresh recorded-only evidence.
 )
 
 # Explicit, narrow review map for THIS profile only. The historical training
@@ -188,8 +194,179 @@ def _authenticated_bytes(path: Path, size: int, digest: str, name: str) -> bytes
 # --------------------------------------------------------------------------
 # primary record
 
-def verify_primary_record(root: Path = ROOT) -> dict:
-    """Authenticate the runtime record against the exact small-records file."""
+def _verify_runtime_record(root: Path) -> dict:
+    """Authenticate the already-pinned public record without making a history claim."""
+    from . import quality_adaptation_export_parity as parity
+    record, manifest_sha = parity.read_manifest(root / RECORD_RELATIVE, RECORD_SHA256)
+    for key in ("export_sha256", "export_bytes", "base_checkpoint_sha256", "reference_checkpoint_sha256",
+                "reference_checkpoint_bytes", "training_config_sha256", "training_lock_sha256",
+                "upstream_revision", "installer_sha256", "artifact_id"):
+        if record[key] != PRIMARY[key]:
+            raise AdmissionError(f"runtime record {key} differs from the pinned primary identity")
+    return {"record": record, "record_sha256": manifest_sha}
+
+
+def _pinned_file_binding(path: Path, name: str, digest: str, size: int | None = None) -> dict:
+    p = _regular(path, name)
+    actual_size = p.stat().st_size
+    if size is not None and actual_size != size:
+        raise AdmissionError(f"{name} byte size differs from the pinned artifact")
+    if sha256_file(p, limit=size) != digest:
+        raise AdmissionError(f"{name} SHA-256 differs from the pinned artifact")
+    return {"path": str(p), "bytes": actual_size, "sha256": digest}
+
+
+def _checkpoint_training_metadata(path: Path, size: int, digest: str, *, torch_module=None) -> dict:
+    """Read only after exact byte authentication, always with safe weights-only load.
+
+    This imports Torch but constructs/runs no model. No pickle fallback or extra
+    safe-global allowlist is permitted. Tensor payloads are discarded immediately.
+    """
+    raw = _authenticated_bytes(path, size, digest, "training-identity checkpoint")
+    if torch_module is None:
+        import torch as torch_module
+    loaded = torch_module.load(io.BytesIO(raw), map_location="cpu", weights_only=True)
+    if not isinstance(loaded, Mapping) or not isinstance(loaded.get("head"), Mapping):
+        raise AdmissionError("authenticated checkpoint has no head metadata mapping")
+    fields = ("schema", "config_sha256", "source_lock_sha256", "dataset_sha256",
+              "base_checkpoint_sha256", "deployment", "quality_claim")
+    return {key: loaded[key] for key in fields if key in loaded}
+
+
+def create_recorded_artifact_proof(*, root: Path = ROOT, head_path: Path, reference_path: Path,
+                                   training_config_path: Path | None = None,
+                                   training_config_metadata_only: bool = False) -> dict:
+    """Earn NEW recorded-only artifact evidence; not historical training certification.
+
+    The caller explicitly chooses an authenticated config dictionary OR identity
+    crossbinding in exact runtime/export/reference metadata when the dictionary
+    is unavailable. This never reconstructs historical small/backup/loader records,
+    grants no admission, and is never accepted for live use. No model is run.
+    """
+    if type(training_config_metadata_only) is not bool or ((training_config_path is not None)
+                                                         == training_config_metadata_only):
+        raise AdmissionError("choose exactly one: training config dictionary or explicit metadata-only identity")
+    root = Path(root).resolve(strict=True)
+    verified = _verify_runtime_record(root)
+    record = verified["record"]
+    files = {
+        "head": _pinned_file_binding(head_path, "primary head", PRIMARY["export_sha256"], PRIMARY["export_bytes"]),
+        "reference": _pinned_file_binding(reference_path, "reference best.pt", PRIMARY["reference_checkpoint_sha256"],
+                                           PRIMARY["reference_checkpoint_bytes"]),
+        "base": _pinned_file_binding(root / BASE_CHECKPOINT_RELATIVE, "frozen base", PRIMARY["base_checkpoint_sha256"],
+                                      PRIMARY["base_checkpoint_bytes"]),
+        "installer": _pinned_file_binding(root / "bench/quality_gotrack_inference.py", "atomic installer",
+                                           PRIMARY["installer_sha256"]),
+        "training_lock": _pinned_file_binding(root / "bench/runtime/adaptation-sources.json", "training source lock",
+                                               PRIMARY["training_lock_sha256"]),
+        "runtime_record": _pinned_file_binding(root / RECORD_RELATIVE, "runtime record", RECORD_SHA256),
+    }
+    headers = {}
+    for role, schema in (("head", "correspondence_head_export_v1"),
+                         ("reference", "correspondence_head_checkpoint_v1")):
+        binding = files[role]
+        header = _checkpoint_training_metadata(Path(binding["path"]), binding["bytes"], binding["sha256"])
+        for key, expected in (("schema", schema), ("config_sha256", record["training_config_sha256"]),
+                              ("source_lock_sha256", record["training_lock_sha256"]),
+                              ("dataset_sha256", record["dataset_sha256"])):
+            if header.get(key) != expected:
+                raise AdmissionError(f"{role} checkpoint {key} differs from pinned runtime identity")
+        if role == "head" and (header.get("base_checkpoint_sha256") != record["base_checkpoint_sha256"]
+                or header.get("deployment") != record["export_deployment"] or header.get("quality_claim") is not False):
+            raise AdmissionError("export checkpoint base/deployment/quality metadata differs")
+        headers[role] = header
+    config_identity = {"identity_sha256": record["training_config_sha256"],
+                       "verification": CONFIG_METADATA_VERIFICATION, "raw_config_available": False,
+                       "historical_training_reproduction_claim": False,
+                       "checkpoint_deserialization": "torch.load(weights_only=True,map_location=cpu); no model execution"}
+    if training_config_path is not None:
+        config_path = _regular(training_config_path, "training configuration")
+        if config_path.stat().st_size > 1 << 20:
+            raise AdmissionError("training configuration exceeds 1 MiB")
+        config_raw = config_path.read_bytes()
+        config = wc.loads_strict(config_raw)
+        # Historical config identity is canonical JSON, NOT presentation bytes.
+        config_sha = hashlib.sha256(json.dumps(config, sort_keys=True, separators=(",", ":"),
+                                              allow_nan=False).encode()).hexdigest()
+        if not isinstance(config, dict) or config_sha != PRIMARY["training_config_sha256"]:
+            raise AdmissionError("training configuration canonical identity differs from the pinned artifact")
+        files["training_config"] = {"path": str(config_path), "bytes": len(config_raw),
+                                    "sha256": hashlib.sha256(config_raw).hexdigest(), "canonical_sha256": config_sha}
+        config_identity.update(verification=CONFIG_DICTIONARY_VERIFICATION, raw_config_available=True)
+    closure = source_closure(root, include_upstream=True)
+    if (closure["historical_missing"] or closure["unreviewed_replacements"]
+            or not closure["review_evidence_present"] or any(v is None for v in closure["current_files"].values())):
+        raise AdmissionError("complete pinned/reviewed source closure is required for fresh recorded proof")
+    body = {"schema": RECORDED_ARTIFACT_SCHEMA, "execution_scope": RECORDED_EXECUTION_SCOPE,
+            "lineage": RECORDED_LINEAGE, "repository_root": str(root), "record_sha256": verified["record_sha256"],
+            "primary": dict(PRIMARY), "files": files, "training_configuration": config_identity,
+            "authenticated_checkpoint_metadata": headers, "source_closure": closure, "runtime_packages": runtime_packages(),
+            "historical_small_records_verified": False, "historical_receipts_verified": False,
+            "live_eligible": False, "execution_admission_granted": False, "quality_claim": False}
+    return {**body, "proof_sha256": wc.canonical_sha256(body)}
+
+
+def verify_recorded_artifact_proof(proof: Mapping[str, Any], *, root: Path = ROOT) -> dict:
+    """Recompute every binding. A self-hash or stored positive verdict is not evidence."""
+    if not isinstance(proof, Mapping):
+        raise AdmissionError("recorded artifact proof must be a mapping")
+    body = dict(proof)
+    stored = body.pop("proof_sha256", None)
+    if body.get("schema") != RECORDED_ARTIFACT_SCHEMA or wc.canonical_sha256(body) != stored:
+        raise AdmissionError("recorded artifact proof schema or self-hash differs")
+    if body.get("repository_root") != str(Path(root).resolve(strict=True)):
+        raise AdmissionError("recorded artifact proof belongs to another repository location; earn a fresh proof")
+    try:
+        files = body["files"]
+        config = body["training_configuration"]
+        if type(config["raw_config_available"]) is not bool:
+            raise AdmissionError("raw config availability must be a boolean")
+        raw_available = config["raw_config_available"]
+        config_path = Path(files["training_config"]["path"]) if raw_available else None
+        fresh = create_recorded_artifact_proof(root=root, head_path=Path(files["head"]["path"]),
+            reference_path=Path(files["reference"]["path"]), training_config_path=config_path,
+            training_config_metadata_only=not raw_available)
+    except (KeyError, TypeError) as exc:
+        raise AdmissionError("recorded artifact proof file bindings are invalid") from exc
+    if dict(proof) != fresh:
+        raise AdmissionError("recorded artifact proof drift: scope, identity, files, source or runtime differs")
+    return fresh
+
+
+def load_recorded_artifact_proof(path: Path, *, root: Path = ROOT) -> dict:
+    p = _regular(path, "recorded artifact proof")
+    if p.stat().st_size > 1 << 20:
+        raise AdmissionError("recorded artifact proof exceeds 1 MiB")
+    return verify_recorded_artifact_proof(wc.loads_strict(p.read_bytes()), root=root)
+
+
+def _recorded_lineage(proof: Mapping[str, Any]) -> dict:
+    return {"mode": RECORDED_ARTIFACT_SCHEMA, "proof_sha256": proof["proof_sha256"],
+            "lineage": RECORDED_LINEAGE, "historical_small_records_verified": False,
+            "historical_receipts_verified": False,
+            "training_config_verification": proof["training_configuration"]["verification"],
+            "raw_training_config_available": proof["training_configuration"]["raw_config_available"]}
+
+
+def _contract_recorded_proof(contract: WorkbenchContract, proof: Mapping[str, Any] | None,
+                             *, root: Path = ROOT) -> None:
+    expected = contract.body.get("recorded_artifact_proof")
+    if expected is None and proof is None:
+        return  # historical install/verification remains unchanged
+    if expected is None or proof is None or dict(proof) != expected:
+        raise AdmissionError("explicit recorded artifact opt-in must match the contract; modes cannot be mixed")
+    verify_recorded_artifact_proof(proof, root=root)
+    if (contract.body.get("execution_scope") != RECORDED_EXECUTION_SCOPE
+            or contract.body.get("live_eligible") is not False
+            or contract.body.get("artifact_lineage") != _recorded_lineage(proof)):
+        raise AdmissionError("recorded-only contract scope/lineage differs")
+
+
+def verify_primary_record(root: Path = ROOT, *, recorded_artifact: Mapping[str, Any] | None = None) -> dict:
+    """Default: exact historical small-records. Opt-in: NEW finite-recorded-only proof."""
+    if recorded_artifact is not None:
+        proof = verify_recorded_artifact_proof(recorded_artifact, root=root)
+        return {**_verify_runtime_record(root), "artifact_lineage": _recorded_lineage(proof)}
     from . import quality_adaptation_export_parity as parity
     record_path = root / RECORD_RELATIVE
     record, manifest_sha = parity.read_manifest(record_path, RECORD_SHA256)
@@ -240,15 +417,18 @@ def _check(name: str, ok: bool, detail: str, action: str | None = None) -> dict:
 
 
 def neural_preflight(*, root: Path = ROOT, head_path: Path | None = None, reference_path: Path | None = None,
-                     verify_base_hash: bool = False, admission_path: Path | None = None) -> dict:
+                     verify_base_hash: bool = False, admission_path: Path | None = None,
+                     recorded_artifact: Mapping[str, Any] | None = None) -> dict:
     """Diagnose every real prerequisite without importing torch or running a network."""
     import importlib.util
     head_path = Path(head_path) if head_path else root / DEFAULT_MODEL_DIR / "head.pt"
     reference_path = Path(reference_path) if reference_path else root / DEFAULT_MODEL_DIR / "best.pt"
     checks = []
     try:
-        verify_primary_record(root)
-        checks.append(_check("primary_record", True, f"{RECORD_RELATIVE} matches {SMALL_RECORDS_RELATIVE}"))
+        verify_primary_record(root, recorded_artifact=recorded_artifact)
+        detail = (f"fresh local recorded-only proof {recorded_artifact['proof_sha256']}; historical records NOT verified"
+                  if recorded_artifact is not None else f"{RECORD_RELATIVE} matches {SMALL_RECORDS_RELATIVE}")
+        checks.append(_check("primary_record", True, detail))
     except Exception as exc:  # noqa: BLE001 - diagnostic surface
         checks.append(_check("primary_record", False, f"{type(exc).__name__}: {exc}",
                              "restore the exact runtime record and small-records file"))
@@ -323,11 +503,12 @@ def neural_preflight(*, root: Path = ROOT, head_path: Path | None = None, refere
 # --------------------------------------------------------------------------
 # head installation (real APIs)
 
-def install_primary_head(network, head_path: Path, *, device: str = "cpu", torch_module=None):
+def install_primary_head(network, head_path: Path, *, device: str = "cpu", torch_module=None,
+                         recorded_artifact: Mapping[str, Any] | None = None):
     """Install the exact flow-terminal export through the unchanged atomic installer."""
     from . import quality_adaptation_export_parity as parity
     from . import quality_gotrack_inference as installer
-    verified = verify_primary_record()
+    verified = verify_primary_record(recorded_artifact=recorded_artifact)
     head_path = _regular(head_path, "primary head export")
     if head_path.stat().st_size != PRIMARY["export_bytes"]:
         raise AdmissionError("primary head byte size differs")
@@ -337,6 +518,9 @@ def install_primary_head(network, head_path: Path, *, device: str = "cpu", torch
     provenance.update({"profile": PROFILE, "role": "primary_neural",
                        "installer_sha256": PRIMARY["installer_sha256"],
                        "installed_head_state_sha256": module_state_sha256(network.pose_head)})
+    if recorded_artifact is not None:
+        provenance.update(artifact_lineage=verified["artifact_lineage"], execution_scope=RECORDED_EXECUTION_SCOPE,
+                          live_eligible=False)
     provenance["install_digest"] = wc.canonical_sha256(provenance)
     return network, provenance
 
@@ -378,9 +562,12 @@ def load_base_network(device: str = "cpu"):
     return quality_gotrack.load_network(device)
 
 
-def load_primary_network(head_path: Path, device: str = "cpu"):
+def load_primary_network(head_path: Path, device: str = "cpu", *,
+                         recorded_artifact: Mapping[str, Any] | None = None):
+    if recorded_artifact is not None:
+        verify_recorded_artifact_proof(recorded_artifact)
     network = load_base_network(device)
-    return install_primary_head(network, head_path, device=device)
+    return install_primary_head(network, head_path, device=device, recorded_artifact=recorded_artifact)
 
 
 def load_baseline_network(device: str = "cpu"):
@@ -547,7 +734,8 @@ class WorkbenchContract:
 
 def prepare_workbench_contract(cases: Sequence[Mapping[str, Any]], *, root: Path = ROOT,
                                head_path: Path, reference_path: Path, verify_base: bool = True,
-                               include_upstream: bool = True) -> WorkbenchContract:
+                               include_upstream: bool = True,
+                               recorded_artifact: Mapping[str, Any] | None = None) -> WorkbenchContract:
     """Authenticate model, source and per-case input bindings for the new profile.
 
     Each case: {case_id, family, rgb_path, rgb_sha256, mask_path, mask_sha256,
@@ -557,7 +745,9 @@ def prepare_workbench_contract(cases: Sequence[Mapping[str, Any]], *, root: Path
     must come from inference/onboarding; evaluator-derived values are rejected.
     Relative auto-reconstructed (object_unit) geometry is excluded.
     """
-    verified = verify_primary_record(root)
+    if recorded_artifact is not None and (not verify_base or not include_upstream):
+        raise AdmissionError("fresh recorded artifact proof requires complete base/source verification")
+    verified = verify_primary_record(root, recorded_artifact=recorded_artifact)
     _authenticated_bytes(head_path, PRIMARY["export_bytes"], PRIMARY["export_sha256"], "primary export")
     _authenticated_bytes(reference_path, PRIMARY["reference_checkpoint_bytes"],
                          PRIMARY["reference_checkpoint_sha256"], "reference best.pt")
@@ -608,6 +798,9 @@ def prepare_workbench_contract(cases: Sequence[Mapping[str, Any]], *, root: Path
             "source_closure": source_closure(root, include_upstream=include_upstream),
             "renderer_factory": _render_factory(require_pins=True),
             "evaluator_inputs_read": False, "quality_claim": False}
+    if recorded_artifact is not None:
+        body.update(recorded_artifact_proof=dict(recorded_artifact), artifact_lineage=verified["artifact_lineage"],
+                    execution_scope=RECORDED_EXECUTION_SCOPE, live_eligible=False)
     return WorkbenchContract(body, wc.canonical_sha256(body))
 
 
@@ -1126,7 +1319,8 @@ def run_fullimage_head_parity(cases: Sequence[Mapping[str, Any]], *, contract: W
                               head_path: Path, reference_path: Path, output_dir: Path,
                               device: str = "cpu", base_loader: Callable | None = None,
                               runner_factory: Callable | None = None, torch_module=None,
-                              tolerance: Mapping[str, Any] = PARITY_TOLERANCE) -> dict:
+                              tolerance: Mapping[str, Any] = PARITY_TOLERANCE,
+                              recorded_artifact: Mapping[str, Any] | None = None) -> dict:
     """Run the reference head and the installed export sequentially on the same
     frozen RGB cases and store every compared array.
 
@@ -1135,6 +1329,7 @@ def run_fullimage_head_parity(cases: Sequence[Mapping[str, Any]], *, contract: W
     Insufficient correspondences in both variants is an unavailable pose with
     numeric parity intact, not a parity failure.
     """
+    _contract_recorded_proof(contract, recorded_artifact)
     if dict(tolerance) != PARITY_TOLERANCE:
         raise AdmissionError("parity tolerance must be the pre-declared constant")
     if runtime_packages() != contract.body.get("runtime_packages"):
@@ -1188,7 +1383,7 @@ def run_fullimage_head_parity(cases: Sequence[Mapping[str, Any]], *, contract: W
         variants[variant] = _parity_variant(variant, prepared=prepared, output_dir=output_dir, device=device,
                                             base_loader=base_loader, runner_factory=runner_factory,
                                             torch_module=torch_module, head_path=head_path,
-                                            reference_path=reference_path, events=events)
+                                            reference_path=reference_path, events=events, recorded_artifact=recorded_artifact)
         try:
             release = _release_device_memory(torch_module)
         except BaseException as exc:
@@ -1222,6 +1417,9 @@ def run_fullimage_head_parity(cases: Sequence[Mapping[str, Any]], *, contract: W
         "all_passed": all(c["passed"] for c in comparisons.values()),
         "scope": "experimental execution compatibility; not model quality",
     }
+    if recorded_artifact is not None:
+        receipt.update(artifact_lineage=_recorded_lineage(recorded_artifact),
+                       execution_scope=RECORDED_EXECUTION_SCOPE, live_eligible=False)
     receipt["receipt_sha256"] = wc.canonical_sha256(receipt)
     (output_dir / "parity-receipt.json").write_bytes(wc.canonical_json(receipt))
     _phase_event(events, "receipt_written", receipt_sha256=receipt["receipt_sha256"])
@@ -1268,7 +1466,7 @@ def _load_trace(output_dir: Path, ref: Mapping[str, str]) -> dict:
 
 def _parity_variant(variant: str, *, prepared, output_dir: Path, device: str, base_loader: Callable,
                     runner_factory: Callable, torch_module, head_path: Path, reference_path: Path,
-                    events: Path) -> dict:
+                    events: Path, recorded_artifact: Mapping[str, Any] | None = None) -> dict:
     """Load, install, trace and fully release one parity variant.
 
     Returns only plain data (provenance, settings, forward counts, render
@@ -1287,7 +1485,8 @@ def _parity_variant(variant: str, *, prepared, output_dir: Path, device: str, ba
         if variant == "reference":
             network, provenance = load_reference_head(network, reference_path, device=device, torch_module=torch_module)
         else:
-            network, provenance = install_primary_head(network, head_path, device=device, torch_module=torch_module)
+            kwargs = {"recorded_artifact": recorded_artifact} if recorded_artifact is not None else {}
+            network, provenance = install_primary_head(network, head_path, device=device, torch_module=torch_module, **kwargs)
         _phase_event(events, f"{variant}_head_installed")
         counter = ForwardCounter(network)
         runner = runner_factory(network, device)
@@ -1390,8 +1589,22 @@ def _recompute_depth_evidence(evidence: Any, evidence_dir: Path | None) -> dict 
 
 def verify_serving_admission(parity_dir: Path, *, contract: WorkbenchContract, geometry: Mapping[str, Any],
                              root: Path = ROOT, include_upstream: bool = True,
-                             geometry_evidence_dir: Path | None = None) -> ServingAdmission:
+                             geometry_evidence_dir: Path | None = None,
+                             recorded_artifact: Mapping[str, Any] | None = None,
+                             execution_context: str = "recorded") -> ServingAdmission:
     reasons: list[str] = []
+    if execution_context not in ("recorded", "live"):
+        raise AdmissionError("unknown execution context")
+    try:
+        fresh_contract = (contract.body.get("recorded_artifact_proof") is not None
+                          or contract.body.get("execution_scope") == RECORDED_EXECUTION_SCOPE)
+        if (fresh_contract or recorded_artifact is not None) and execution_context != "recorded":
+            raise AdmissionError("fresh artifact proof is finite recorded-only; LIVE use is forbidden")
+        _contract_recorded_proof(contract, recorded_artifact, root=root)
+        if recorded_artifact is not None and not include_upstream:
+            raise AdmissionError("fresh artifact proof requires complete source verification")
+    except (AdmissionError, NeuralUnavailable, OSError, ValueError) as exc:
+        return ServingAdmission(False, (str(exc),), {"schema": ADMISSION_SCHEMA})
     parity_dir = Path(parity_dir)
     receipt_path = parity_dir / "parity-receipt.json"
     try:
@@ -1403,6 +1616,12 @@ def verify_serving_admission(parity_dir: Path, *, contract: WorkbenchContract, g
         reasons.append("parity receipt self-hash mismatch")
     if receipt.get("schema") != PARITY_SCHEMA or receipt.get("profile") != PROFILE:
         reasons.append("parity receipt schema/profile differs")
+    if recorded_artifact is not None:
+        if (receipt.get("artifact_lineage") != _recorded_lineage(recorded_artifact)
+                or receipt.get("execution_scope") != RECORDED_EXECUTION_SCOPE or receipt.get("live_eligible") is not False):
+            reasons.append("parity receipt recorded-only lineage/scope differs")
+    elif receipt.get("artifact_lineage") is not None or receipt.get("execution_scope") == RECORDED_EXECUTION_SCOPE:
+        reasons.append("fresh recorded-only parity cannot admit a historical contract")
     if receipt.get("contract_sha256") != contract.sha256:
         reasons.append("parity receipt is bound to another contract")
     if receipt.get("tolerance") != PARITY_TOLERANCE:
@@ -1428,7 +1647,7 @@ def verify_serving_admission(parity_dir: Path, *, contract: WorkbenchContract, g
     if receipt.get("runtime_packages") != contract.body.get("runtime_packages"):
         reasons.append("parity ran under runtime packages that differ from the contract")
     try:
-        verify_primary_record(root)
+        verify_primary_record(root, recorded_artifact=recorded_artifact)
     except Exception as exc:  # noqa: BLE001
         reasons.append(f"primary record: {exc}")
     for case in contract.body["cases"]:
@@ -1468,6 +1687,10 @@ def verify_serving_admission(parity_dir: Path, *, contract: WorkbenchContract, g
                 reasons.append("reference variant provenance differs")
             if variant == "export" and prov.get("head", {}).get("installed_sha256") != PRIMARY["export_sha256"]:
                 reasons.append("export variant was not installed from the pinned export")
+            if variant == "export" and recorded_artifact is not None:
+                if (prov.get("artifact_lineage") != _recorded_lineage(recorded_artifact)
+                        or prov.get("execution_scope") != RECORDED_EXECUTION_SCOPE or prov.get("live_eligible") is not False):
+                    reasons.append("export installation recorded-only lineage/scope differs")
             counts = info.get("forward_counts", {}).get(cid, {})
             if any(int(counts.get(m, 0)) < 1 for m in ForwardCounter.MODULES):
                 reasons.append(f"{cid}/{variant}: observed full-network execution missing")
@@ -1549,6 +1772,9 @@ def verify_serving_admission(parity_dir: Path, *, contract: WorkbenchContract, g
             "reviewed_replacements": current["reviewed_replacements"],
             "unreviewed_replacements": current["unreviewed_replacements"],
             "review_map_sha256": current["review_map_sha256"]}
+    if recorded_artifact is not None:
+        body.update(artifact_lineage=_recorded_lineage(recorded_artifact), execution_scope=RECORDED_EXECUTION_SCOPE,
+                    live_eligible=False)
     return ServingAdmission(not reasons, tuple(dict.fromkeys(reasons)), body)
 
 
@@ -1595,6 +1821,11 @@ class NeuralSession:
         self._digest = wc.canonical_sha256(self._provenance)
         if role == "primary_neural" and self._provenance.get("head", {}).get("installed_sha256") != PRIMARY["export_sha256"]:
             raise NeuralUnavailable("primary session must run the installed flow-terminal export")
+        if role == "primary_neural" and RECORDED_EXECUTION_SCOPE in (
+                admission.body.get("execution_scope"), self._provenance.get("execution_scope")):
+            if (self._provenance.get("artifact_lineage") != admission.body.get("artifact_lineage")
+                    or self._provenance.get("execution_scope") != admission.body.get("execution_scope")):
+                raise NeuralUnavailable("primary installed proof differs from recorded-only admission")
         self._closed = False
         self._last_index = None
         self._state: dict = {}
@@ -1610,6 +1841,9 @@ class NeuralSession:
         installed = head.get("installed_sha256") if self.role == "primary_neural" else None
         extras_fn = getattr(self.backend, "identity_extras", None)
         extras = dict(extras_fn(self.clip.intrinsics.K)) if callable(extras_fn) else {}
+        if self.admission.body.get("execution_scope") == RECORDED_EXECUTION_SCOPE:
+            extras.update(artifact_lineage=self.admission.body["artifact_lineage"],
+                          execution_scope=RECORDED_EXECUTION_SCOPE, live_eligible=False)
         return {**base, **extras, "installed_head_sha256": installed,
                 "installed_head_state_sha256": self._provenance.get("installed_head_state_sha256"),
                 "install_digest": self._digest, "admission_contract_sha256": self.admission.body["contract_sha256"]}
@@ -1730,7 +1964,9 @@ def load_contract(path: Path) -> WorkbenchContract:
     return WorkbenchContract(body, stored)
 
 
-def load_admission(directory: Path, *, root: Path = ROOT, include_upstream: bool = True) -> ServingAdmission:
+def load_admission(directory: Path, *, root: Path = ROOT, include_upstream: bool = True,
+                   recorded_artifact: Mapping[str, Any] | None = None,
+                   execution_context: str = "recorded") -> ServingAdmission:
     """Re-verify an admission directory {contract.json, geometry.json, geometry-evidence/, parity/};
     never trusts stored verdicts."""
     directory = Path(directory)
@@ -1738,7 +1974,8 @@ def load_admission(directory: Path, *, root: Path = ROOT, include_upstream: bool
     geometry = wc.loads_strict((directory / "geometry.json").read_bytes())
     return verify_serving_admission(directory / "parity", contract=contract, geometry=geometry, root=root,
                                     include_upstream=include_upstream,
-                                    geometry_evidence_dir=directory / "geometry-evidence")
+                                    geometry_evidence_dir=directory / "geometry-evidence",
+                                    recorded_artifact=recorded_artifact, execution_context=execution_context)
 
 
 # --------------------------------------------------------------------------
@@ -2047,11 +2284,11 @@ class GoTrackMetricBackend(NeuralBackend):
     def __init__(self, role: str, bundle: MetricBundle, *, head_path: Path | None = None, device: str = "cpu",
                  iterations: int = 5, min_inliers: int = 24, network_loader: Callable | None = None,
                  refiner_factory: Callable | None = None, consistency_deg: float = 10.0,
-                 consistency_translation: float = 0.1):
+                 consistency_translation: float = 0.1, recorded_artifact: Mapping[str, Any] | None = None):
         if role == "primary_neural":
             if head_path is None:
                 raise NeuralUnavailable("primary backend requires the pinned head.pt path")
-            network, provenance = (network_loader or (lambda d: load_primary_network(Path(head_path), d)))(device)
+            network, provenance = (network_loader or (lambda d: load_primary_network(Path(head_path), d, recorded_artifact=recorded_artifact)))(device)
         elif role == "frozen_baseline":
             network, provenance = (network_loader or load_baseline_network)(device)
         else:

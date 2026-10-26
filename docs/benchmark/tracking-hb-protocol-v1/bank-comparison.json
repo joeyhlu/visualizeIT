@@ -1,0 +1,275 @@
+{
+  "acquiredModelLockSHA256": "8e442eabc4d0bdc629b3fca9ec1f35f296ede86ed28f986fb25f7f66101abf90",
+  "auditWallSeconds": 0.4925053780007147,
+  "limitations": [
+    "Nearest-vertex distance is NOT exact point-to-triangle surface distance or independent physical truth.",
+    "Original ray anchors lie on triangles; their nonzero nearest-vertex distance includes mesh-discretization floor.",
+    "Depth anchors may differ from the scan due to sensor noise, registration, scan shape, source poses or mixed-depth pixels.",
+    "Anchor count, locations, spatial coverage, feature selection and geometry all change together; no causal quality-versus-quantity isolation or fix claim.",
+    "No unseen/generalization, full production pipeline, GoTrack quality, accuracy or speed is established by these proxies."
+  ],
+  "methods": {
+    "duplicates": "Exact coordinate/descriptor equality; one-mm grid occupancy is descriptive and grid-origin dependent.",
+    "nearest": "Single-thread cKDTree query against every exact source-model vertex; anchor metres converted to model millimetres.",
+    "nonplanarity": "Smallest/largest centered point singular value for whole anchor/seed sets, not per-frame inlier solver gates."
+  },
+  "numpyVersion": "1.26.4",
+  "objects": [
+    {
+      "initializations": {
+        "original_production_mesh": {
+          "anchorGeometry": {
+            "axisExtentMM": [
+              149.43457126486626,
+              99.02743485957947,
+              213.5061080266814
+            ],
+            "count": 1893,
+            "exactCoordinateDuplicateFraction": 0.003697834125726329,
+            "nearestModelVertexDistanceAbove10MMFraction": 0.0,
+            "nearestModelVertexDistanceMaxMM": 2.463578396467657,
+            "nearestModelVertexDistanceP50MM": 0.38696869799760675,
+            "nearestModelVertexDistanceP95MM": 0.6183013298359794,
+            "occupiedOneMMSourceGridCells": 1499,
+            "principalPopulationStdMM": [
+              60.48730574357663,
+              26.59326598391086,
+              13.158249177858401
+            ],
+            "rmsRadiusFromCentroidMM": 67.37251274247205,
+            "wholeBankNonplanaritySmallestOverLargest": 0.21753736616472993
+          },
+          "exactDescriptorDuplicateFraction": 0.0,
+          "previousGrayShape": [
+            480,
+            640
+          ],
+          "provenance": {
+            "archiveHashVerified": true,
+            "npzPath": "artifacts/tracking-benchmark/real-prefix-production-v2/object-000020/reference-bank.npz",
+            "npzSHA256": "5fc61b144a890eeba879732255e281cf861a64b024f816e2d2fe3350d17ced72",
+            "orderedArrayHashVerified": true,
+            "orderedArraysSHA256": "aa87d14ef42149ff4b739e4f9f7d5e8543e8db6c6055e1410a92e2ef72a23283",
+            "progressPath": "artifacts/tracking-benchmark/real-prefix-production-v2/progress.json",
+            "progressSHA256": "1978ab6faffcf1976e33229641a2bf4acf6e7b6597118bb90ddda3257ef9c887"
+          },
+          "seedPixelCount": 148,
+          "seedViewGeometry": {
+            "axisExtentMM": [
+              134.96109347452622,
+              94.4630009275555,
+              197.0209287811855
+            ],
+            "count": 148,
+            "exactCoordinateDuplicateFraction": 0.0,
+            "nearestModelVertexDistanceAbove10MMFraction": 0.0,
+            "nearestModelVertexDistanceMaxMM": 0.8762349733426561,
+            "nearestModelVertexDistanceP50MM": 0.3861868228917217,
+            "nearestModelVertexDistanceP95MM": 0.6672890538116429,
+            "occupiedOneMMSourceGridCells": 144,
+            "principalPopulationStdMM": [
+              62.418411841789975,
+              23.432850315552148,
+              12.852893784086008
+            ],
+            "rmsRadiusFromCentroidMM": 67.89958386755677,
+            "wholeBankNonplanaritySmallestOverLargest": 0.2059151042910839
+          }
+        },
+        "simplified_depth_budget": {
+          "anchorGeometry": {
+            "axisExtentMM": [
+              143.12744373736945,
+              93.6614089655443,
+              196.92353390724497
+            ],
+            "count": 3000,
+            "exactCoordinateDuplicateFraction": 0.003666666666666707,
+            "nearestModelVertexDistanceAbove10MMFraction": 0.0,
+            "nearestModelVertexDistanceMaxMM": 7.887229050478819,
+            "nearestModelVertexDistanceP50MM": 1.7253264769532064,
+            "nearestModelVertexDistanceP95MM": 4.9463915607482205,
+            "occupiedOneMMSourceGridCells": 2566,
+            "principalPopulationStdMM": [
+              57.289304253700635,
+              22.184285292849523,
+              9.833697151060722
+            ],
+            "rmsRadiusFromCentroidMM": 62.21662555528386,
+            "wholeBankNonplanaritySmallestOverLargest": 0.17164979186189905
+          },
+          "exactDescriptorDuplicateFraction": 0.0,
+          "previousGrayShape": [
+            480,
+            640
+          ],
+          "provenance": {
+            "archiveHashVerified": true,
+            "npzPath": "artifacts/tracking-benchmark/real-prefix-simplified-v2/object-000020/reference-bank.npz",
+            "npzSHA256": "293fb3653266cd41c4a6a34ab47e5d16765c8efd2890810bdb07482a891c1d4e",
+            "orderedArrayHashVerified": true,
+            "orderedArraysSHA256": "06f1360d52f408adc364606621ba6d725767b5c4e7473ed3b522cace2350c128",
+            "progressPath": "artifacts/tracking-benchmark/real-prefix-simplified-v2/progress.json",
+            "progressSHA256": "a9803d9c900107ecfed94027f250b272e31760b0949bd15f5fe66220dd35df26"
+          },
+          "seedPixelCount": 300,
+          "seedViewGeometry": {
+            "axisExtentMM": [
+              136.48838874521317,
+              88.22113278423623,
+              175.19109719619405
+            ],
+            "count": 300,
+            "exactCoordinateDuplicateFraction": 0.0,
+            "nearestModelVertexDistanceAbove10MMFraction": 0.0,
+            "nearestModelVertexDistanceMaxMM": 6.688916859482582,
+            "nearestModelVertexDistanceP50MM": 2.39930426757707,
+            "nearestModelVertexDistanceP95MM": 5.394959813328571,
+            "occupiedOneMMSourceGridCells": 281,
+            "principalPopulationStdMM": [
+              57.05864460499425,
+              19.195348967542667,
+              8.029798722334416
+            ],
+            "rmsRadiusFromCentroidMM": 60.73407621480698,
+            "wholeBankNonplanaritySmallestOverLargest": 0.14072887251218688
+          }
+        }
+      },
+      "modelPath": ".cache/tracking-benchmark/real-v1/models/obj_000020.ply",
+      "modelSHA256": "acc8df19d3b4cc79fcd57c3810a793739b8c970e7889959f3dca4cde35032898",
+      "objectId": 20,
+      "sourceModelVertices": 130232
+    },
+    {
+      "initializations": {
+        "original_production_mesh": {
+          "anchorGeometry": {
+            "axisExtentMM": [
+              453.9349775040266,
+              100.2882409292493,
+              190.71722447075223
+            ],
+            "count": 1085,
+            "exactCoordinateDuplicateFraction": 0.0027649769585254003,
+            "nearestModelVertexDistanceAbove10MMFraction": 0.0,
+            "nearestModelVertexDistanceMaxMM": 0.7284051797058025,
+            "nearestModelVertexDistanceP50MM": 0.3834380939108479,
+            "nearestModelVertexDistanceP95MM": 0.6063591423806118,
+            "occupiedOneMMSourceGridCells": 936,
+            "principalPopulationStdMM": [
+              86.15344972882413,
+              50.53500898565525,
+              21.851526634754485
+            ],
+            "rmsRadiusFromCentroidMM": 102.24330417991521,
+            "wholeBankNonplanaritySmallestOverLargest": 0.2536349583624819
+          },
+          "exactDescriptorDuplicateFraction": 0.0,
+          "previousGrayShape": [
+            480,
+            640
+          ],
+          "provenance": {
+            "archiveHashVerified": true,
+            "npzPath": "artifacts/tracking-benchmark/real-prefix-production-v2/object-000028/reference-bank.npz",
+            "npzSHA256": "34d3e5c898a5e85fc7a57fc8a7f130f1d0dbee6ab218d87c94b52435480e03e2",
+            "orderedArrayHashVerified": true,
+            "orderedArraysSHA256": "446a4cdd02ec82309c9582a74e76b32cabbbddd53084bfbac4f842cabcc70592",
+            "progressPath": "artifacts/tracking-benchmark/real-prefix-production-v2/progress.json",
+            "progressSHA256": "1978ab6faffcf1976e33229641a2bf4acf6e7b6597118bb90ddda3257ef9c887"
+          },
+          "seedPixelCount": 92,
+          "seedViewGeometry": {
+            "axisExtentMM": [
+              265.51788468277493,
+              99.72949765988474,
+              189.96054899830438
+            ],
+            "count": 92,
+            "exactCoordinateDuplicateFraction": 0.0,
+            "nearestModelVertexDistanceAbove10MMFraction": 0.0,
+            "nearestModelVertexDistanceMaxMM": 0.7284051797058025,
+            "nearestModelVertexDistanceP50MM": 0.36352435225637064,
+            "nearestModelVertexDistanceP95MM": 0.6011280594256657,
+            "occupiedOneMMSourceGridCells": 91,
+            "principalPopulationStdMM": [
+              63.567653024262015,
+              54.98609012494272,
+              23.922647277033665
+            ],
+            "rmsRadiusFromCentroidMM": 87.38769748072468,
+            "wholeBankNonplanaritySmallestOverLargest": 0.37633365617420317
+          }
+        },
+        "simplified_depth_budget": {
+          "anchorGeometry": {
+            "axisExtentMM": [
+              485.27936888133604,
+              234.61265284619657,
+              204.27590042832028
+            ],
+            "count": 1016,
+            "exactCoordinateDuplicateFraction": 0.004921259842519676,
+            "nearestModelVertexDistanceAbove10MMFraction": 0.003937007874015748,
+            "nearestModelVertexDistanceMaxMM": 190.7375440084776,
+            "nearestModelVertexDistanceP50MM": 1.1886297257675185,
+            "nearestModelVertexDistanceP95MM": 3.608576594905812,
+            "occupiedOneMMSourceGridCells": 862,
+            "principalPopulationStdMM": [
+              78.14451239868302,
+              29.715585128125138,
+              21.0808424547472
+            ],
+            "rmsRadiusFromCentroidMM": 86.2205470647029,
+            "wholeBankNonplanaritySmallestOverLargest": 0.2697674066631258
+          },
+          "exactDescriptorDuplicateFraction": 0.0,
+          "previousGrayShape": [
+            480,
+            640
+          ],
+          "provenance": {
+            "archiveHashVerified": true,
+            "npzPath": "artifacts/tracking-benchmark/real-prefix-simplified-v2/object-000028/reference-bank.npz",
+            "npzSHA256": "956743dc3eb0f3d223a07b595f51a5b8248a00d85f0fea51a2f79e0cbb0976a2",
+            "orderedArrayHashVerified": true,
+            "orderedArraysSHA256": "d14b206db02b3eedd47141c1f0a2e9b9eba3b38778d568e4c62b6cc4432e6287",
+            "progressPath": "artifacts/tracking-benchmark/real-prefix-simplified-v2/progress.json",
+            "progressSHA256": "a9803d9c900107ecfed94027f250b272e31760b0949bd15f5fe66220dd35df26"
+          },
+          "seedPixelCount": 73,
+          "seedViewGeometry": {
+            "axisExtentMM": [
+              240.20149815003577,
+              70.21019747387061,
+              163.24492366049378
+            ],
+            "count": 73,
+            "exactCoordinateDuplicateFraction": 0.0,
+            "nearestModelVertexDistanceAbove10MMFraction": 0.0,
+            "nearestModelVertexDistanceMaxMM": 4.407151903542906,
+            "nearestModelVertexDistanceP50MM": 1.108395999767133,
+            "nearestModelVertexDistanceP95MM": 2.609682575530855,
+            "occupiedOneMMSourceGridCells": 68,
+            "principalPopulationStdMM": [
+              50.088068413570205,
+              28.4819906397234,
+              16.710398720759
+            ],
+            "rmsRadiusFromCentroidMM": 59.9939648098917,
+            "wholeBankNonplanaritySmallestOverLargest": 0.3336203461228244
+          }
+        }
+      },
+      "modelPath": ".cache/tracking-benchmark/real-v1/models/obj_000028.ply",
+      "modelSHA256": "9e28c594b48266b2081bf709be6b6929e6a3c92a7df32f41122770b3dc90a27f",
+      "objectId": 28,
+      "sourceModelVertices": 190640
+    }
+  ],
+  "schema": "visualizeit-tracking-bank-geometry-audit/1",
+  "scipyVersion": "1.13.1",
+  "scope": "Persisted first-ten authorized-onboarding banks only; no ORB, PnP, tracker/model forward pass, rasterization, scored frames, evaluator labels or benchmark scores read.",
+  "scriptSHA256": "4e37c67afc4cdace44c45a8fc2b81890feaa190220b79408e96e7a2f8debc2f4"
+}
