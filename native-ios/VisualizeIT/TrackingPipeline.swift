@@ -319,6 +319,14 @@ final class TrackingPipeline: ObservableObject {
         }
     }
 
+    /// Changing design projects never carries an unrelated object's onboarding.
+    func resetObjectAssociation() {
+        disconnect()
+        selection = nil
+        assetID = ""
+        status = "Choose this project's object and operator asset before tracking."
+    }
+
     func disconnect(clearCredentials: Bool = false) {
         let oldSession = currentSession
         let oldOrigin = operatorURL

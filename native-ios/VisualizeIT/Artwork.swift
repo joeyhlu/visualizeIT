@@ -9,11 +9,14 @@ enum PatternKind: String, CaseIterable, Identifiable {
 }
 
 struct Artwork: Identifiable {
-    let id = UUID()
+    let id: String
     let image: UIImage
     let title: String
     let exportURL: URL
     let patternKind: PatternKind?
+    init(id: String = UUID().uuidString, image: UIImage, title: String, exportURL: URL, patternKind: PatternKind?) {
+        self.id = id; self.image = image; self.title = title; self.exportURL = exportURL; self.patternKind = patternKind
+    }
 }
 
 @MainActor
@@ -85,17 +88,17 @@ enum ArtworkFactory {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("design-\(UUID().uuidString).png")
         try data.write(to: url, options: .atomic)
-        UserDefaults.standard.set(url.lastPathComponent, forKey: "lastArtwork")
-        UserDefaults.standard.set(pattern?.rawValue, forKey: "lastArtworkPattern")
+        // DesignContext commits selection only after PNG/provenance persistence succeeds.
+        // Keep legacy defaults exclusively for adopting pre-context installations.
         return Artwork(image: image, title: title, exportURL: url, patternKind: pattern)
     }
 
     static func restore() -> Artwork? {
-        guard let name = UserDefaults.standard.string(forKey: "lastArtwork") else { return nil }
+        guard let name = UserDefaults.standard.string(forKey: "lastArtwork"), name == URL(fileURLWithPath:name).lastPathComponent else { return nil }
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Artwork").appendingPathComponent(name)
         guard let image = UIImage(contentsOfFile: url.path) else { return nil }
         let pattern = UserDefaults.standard.string(forKey: "lastArtworkPattern").flatMap(PatternKind.init(rawValue:))
-        return Artwork(image: image, title: pattern?.rawValue ?? "Saved design", exportURL: url, patternKind: pattern)
+        return Artwork(id:"legacy-file-" + ContextCodec.hash(Data(name.utf8)), image: image, title: pattern?.rawValue ?? "Saved design", exportURL: url, patternKind: pattern)
     }
 
     enum ArtworkError: LocalizedError {

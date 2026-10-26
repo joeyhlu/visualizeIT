@@ -8,9 +8,56 @@ This project has **not been compiled or run on an iPhone**. The Windows source p
 
 The camera workspace follows the six supplied visual references: glass header, gradient star, rainbow screen rim, Ask / Analyze / Design controls, translucent chat, design chooser, generator, and result panel. The system supplies the status bar, safe areas and permission prompt; no status bar is simulated. A black camera startup / denied state has actionable Settings access. Real camera content is not bundled as a fake preview.
 
-Ask is a clearly scoped, deterministic local design helper. The reference generator retains its five object prompt chips, 500-character editor and “Generate image” button; the result panel retains only Regenerate and Upload. Pattern selection, capability explanation and PNG export live in Settings → Local design preview. The finite generator makes wood slats, color waves, dots or typography using native drawing; it does not create arbitrary objects. Select Typography in Settings to render your words. Submitting an unsupported object example reports the unavailable generator and offers local patterns or import. Generated artwork is 768 × 960 pixels; imported images are downsampled to at most 1024 pixels per edge. Local artwork and its pattern kind persist in Documents/Artwork and the latest is restored on launch. Use native PhotosPicker for import and ShareLink in Settings for export. No photos-library-wide permission or microphone access is requested.
+Ask is a deterministic local design helper. The generator preserves its existing text-only chip capacity, editor and “Generate image” control; the result panel retains Regenerate and Upload. Capability-aware chips replace the unsupported object examples with explicit native alternatives. Pattern selection, capability explanation and PNG export also remain in Settings → Local design preview. The finite generator makes wood slats, color waves, dots or typography using native drawing; it does not create arbitrary objects. Select Typography explicitly to render your words. Generated artwork is 768 × 960 pixels; Photos imports are downsampled to at most 1024 pixels per edge. Snapshot imports are currently blocked before parsing; their PNG-handling code is dormant. Project selection and history persist separately from untouched legacy Documents/Artwork files. Native PhotosPicker imports images and ShareLink in Settings exports the selected PNG. No photos-library-wide permission or microphone access is requested.
 
 Wood slats use a persistent transparent native SceneKit scene: 18 extruded wood slats, dark backing, procedural wood-grain materials, warm key lighting, pink/violet rim lighting and a soft floor ellipse. The finite panel spins upward on entry and rests at an oblique angle. One-finger drag turns it; two-finger drag moves it; pinch resizes it; twist rotates it. Context-menu and VoiceOver actions supply alternatives. Other finite patterns and imported images remain flat native artwork previews. This geometry is not an inferred object, reconstruction or tracked surface attachment. The exported PNG is the finite artwork, not a 3D model. Reduced Motion skips entrance movement; Reduced Transparency provides opaque glass surfaces. Scene playback stops while inactive and the view releases its scene when dismantled. SceneKit is available on the iOS 17 deployment target; newer SDKs may issue its deprecation warnings. Pixel comparison, scene lighting, large accessibility text sizes and physical-phone gestures remain unverified.
+
+## Design Context v1 — source integration, native gates open
+
+Long-press the existing header chat control or Ask for local project creation,
+switching and saved-artwork selection. Snapshot import/export actions currently
+explain why interchange is blocked before opening a file picker or writing data.
+Long-press a chat
+bubble for **Use as brief**, or Generate image for **Save brief / Load accepted
+brief**. The four text-only pattern chips select finite capabilities without
+accepting or generating. Chat proposals never rewrite a manually edited draft.
+The existing prompt field saves edits as an unaccepted draft and reports whether
+it is accepted, unaccepted or stale in its existing character-count area.
+
+The source follows the root document profile in `../docs/design-context.md` and
+registers `DesignContext.swift` in the Xcode source phase. It retains all accepted
+submitted messages within the 1,000-entry and metadata limits. Supported generation
+commits acceptance and its consumed request before rendering; a failed save blocks
+rendering, and a failed render leaves the previous selected image. Unknown intent
+can be saved as a brief. Arbitrary-object generation is unavailable; typography
+requires an explicit capability choice and renders words rather than an object.
+
+System document import/export wiring is present but **visibly gated off** until
+lossless JSON interchange is implemented. The UI, FileDocument callbacks and
+programmatic import/export entry points reject before parsing or writing a
+snapshot. The dormant export disclosure describes the full saved transcript and
+selected PNG only. Local Photos import and explicit selected-PNG sharing remain
+available. Producer claims remain untrusted text and cannot select a procedural
+3D preview. The local catalog retains original creation records when a brief changes.
+Projects and revision IDs are hashed for filesystem names; portable identity is
+retained in documents. Immutable assets/revisions are staged before one atomic
+current/previous pointer write. Catalog selection and conflict checks follow only
+committed pointer ancestry and validated atomic delayed-output receipts. An orphan
+staged manifest from failed activation is not selectable. Corrupt current state can recover a valid previous
+state with an indication; both corrupt states preserve files and report failure.
+Original legacy PNGs remain untouched, with stable adopted identity. Oversized or
+invalid legacy snapshots remain usable locally and refuse snapshot export.
+
+**Unresolved source gate:** Foundation JSONSerialization has not established exact
+Python canonical numeric serialization and Unicode object-key behavior for opaque
+extension/request/settings payloads. In particular numeric lexical distinctions,
+large integers and canonically equivalent but distinct Unicode keys require a
+lossless canonical representation before full A09/A14/A15 interoperability and
+boundary parity can pass. Current source must not be described as a completed
+cross-platform adapter. All native compilation, runtime, power-loss, memory,
+device interchange and visual comparisons are deferred. No native behavior here
+is counted as a synthetic test pass. The actual Android camera app remains a
+mandatory separate next slice.
 
 ## Camera and tracking boundary
 
