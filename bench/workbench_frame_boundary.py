@@ -48,6 +48,7 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 from . import workbench_contract as wc
+from . import workbench_tracking_policy as wtp
 
 BOUNDARY_VERSION = "2"
 SCHEMA_CONTEXT = "workbench_frame_context_v1"
@@ -708,6 +709,7 @@ class FrameOutputV1:
     boundary_reason: str | None
     metadata_json: bytes
     schema: str = SCHEMA_OUTPUT
+    display_decision: wtp.DisplayDecision | None = None
 
 
 # --------------------------------------------------------------------------
@@ -933,7 +935,14 @@ class FrameBoundary:
     ``initialize`` takes ownership of the adapter (and so its session/backend or tracker): on ANY
     initialization failure the adapter is closed and ``cleanup_errors`` records close errors."""
 
-    def __init__(self):
+    def __init__(self, *, tracking_policy: wtp.TrackingPolicy | None = None,
+                 surface_admission: wtp.SurfaceAdmission | None = None,
+                 anchor_record: Mapping | None = None, chart_record: Mapping | None = None):
+        self._tracking_policy = tracking_policy
+        self._tracking_policy_identity = None
+        self._surface_admission = surface_admission
+        self._anchor_record = None if anchor_record is None else wc.loads_strict(_frozen_json(anchor_record, "anchor"))
+        self._chart_record = None if chart_record is None else wc.loads_strict(_frozen_json(chart_record, "chart"))
         self._state = "new"
         self._ctx: FrameContextV1 | None = None
         self._caller_ctx: Any = None
@@ -970,10 +979,14 @@ class FrameBoundary:
     def identity(self) -> dict:
         if self._identity_json is None:
             raise BoundaryStateError("boundary is not initialized")
-        return {"backend_identity": wc.loads_strict(self._identity_json), "adapter": wc.loads_strict(self._open_record),
+        identity = {"backend_identity": wc.loads_strict(self._identity_json), "adapter": wc.loads_strict(self._open_record),
                 "boundary_version": BOUNDARY_VERSION, "context_binding_sha256": self._ctx.binding_sha256,
                 "context_fingerprint": self._caller_fingerprint, "role": self._ctx.role,
                 "source_mode": self._ctx.source_mode}
+        if self._tracking_policy_identity is not None:
+            identity['tracking_policy'] = wc.loads_strict(self._tracking_policy_identity)
+            identity['tracking_policy_sha256'] = hashlib.sha256(self._tracking_policy_identity).hexdigest()
+        return identity
 
     def initialize(self, context: FrameContextV1, adapter: FrameAdapter) -> dict:
         if self._state != "new":
@@ -982,6 +995,13 @@ class FrameBoundary:
             canonical, fingerprint = canonical_context(context)
             if not isinstance(adapter, (NeuralSessionAdapter, RelativeTrackerAdapter)) or canonical.role not in adapter.roles:
                 raise BoundaryRejected("adapter kind does not serve this role")
+            if self._tracking_policy is not None:
+                if not isinstance(self._tracking_policy, wtp.TrackingPolicy):
+                    raise BoundaryRejected("tracking_policy must be a TrackingPolicy")
+                self._verify_tracking_admission(canonical)
+                self._tracking_policy.bind_initial_seed(canonical.binding['bundle']['seed_pose_sha256'])
+                self._tracking_policy.reset(0)
+                self._tracking_policy_identity = _frozen_json(self._tracking_identity(), 'tracking policy identity')
             record = adapter.open(canonical)
             open_record = _frozen_json(record, "adapter record")
             identity_json = _frozen_json(adapter.backend_identity(), "backend identity")
@@ -994,11 +1014,35 @@ class FrameBoundary:
         self._state = "open"
         return self.identity()
 
+    def _tracking_identity(self):
+        return {**self._tracking_policy.identity(),
+                'surface_admission': dataclasses.asdict(self._surface_admission)}
+
+    def _verify_tracking_admission(self, context):
+        try:
+            if (self._tracking_policy_identity is not None and
+                    _frozen_json(self._tracking_identity(), 'tracking policy identity') != self._tracking_policy_identity):
+                raise wtp.PolicyRejected('tracking policy configuration changed after initialize')
+            wtp.verify_full_prefix(context)
+            admission = self._surface_admission
+            if not isinstance(admission, wtp.SurfaceAdmission):
+                raise wtp.PolicyRejected("experimental policy requires explicit surface admission")
+            bundle = context.binding['bundle']
+            if bundle['metric_provenance'] != admission.metric_provenance:
+                raise wtp.PolicyRejected("metric bundle provenance differs from surface admission")
+            admission.verify(calibration_sha256=wc.canonical_sha256(list(context.K)),
+                             geometry_sha256=bundle['glb_sha256'],
+                             anchor_record=self._anchor_record, chart_record=self._chart_record)
+        except (wtp.PolicyRejected, KeyError, TypeError, ValueError) as exc:
+            raise BoundaryRejected(f"tracking policy admission: {exc}") from exc
+
     def reset(self, reason: str = "replay_restart") -> None:
         if reason not in RESET_REASONS:
             raise BoundaryRejected(f"reset reason must be one of {RESET_REASONS}")
         self._require_open()
         self._check_caller_context()
+        if self._tracking_policy is not None:
+            self._verify_tracking_admission(self._ctx)
         try:
             self._adapter.restart()
         except Exception as exc:  # noqa: BLE001
@@ -1007,6 +1051,8 @@ class FrameBoundary:
         self._cursor = 0
         self._invalid = None
         self._last_index = self._last_ts = None
+        if self._tracking_policy is not None:
+            self._tracking_policy.reset(self._epoch)
 
     def close(self) -> list[str]:
         """Idempotent. Returns cleanup errors instead of hiding or raising them."""
@@ -1043,10 +1089,15 @@ class FrameBoundary:
         raise BoundaryFailure(f"adapter failed ({type(exc).__name__}: {exc}); resources closed{note}") from exc
 
     # processing ----------------------------------------------------------
-    def process(self, frame_input: FrameInputV1) -> FrameOutputV1:
+    def process(self, frame_input: FrameInputV1, *,
+                recovery: wtp.RecoveryObservation | None = None) -> FrameOutputV1:
         self._require_open()
         self._check_caller_context()
         validate_input(frame_input)
+        if self._tracking_policy is not None:
+            self._verify_tracking_admission(self._ctx)
+        elif recovery is not None:
+            raise BoundaryRejected("recovery proof requires explicit tracking policy")
         ctx = self._ctx
         expected = self.expected_next
         if expected is None:
@@ -1076,9 +1127,25 @@ class FrameBoundary:
         self._last_index, self._last_ts = frame.source_frame_index, ts
         row, overlay, boundary_reason = self._process_consumed(frame_input, frame)
         overlay = overlay if (overlay is not None and row.render_state == "rendered") else None
+        display_decision = None
+        if self._tracking_policy is not None:
+            if self._invalid is not None:
+                self._fail(wtp.PolicyRejected(self._invalid))
+            try:
+                display_decision = self._tracking_policy.consume(
+                    row, ordinal=position, epoch=self._epoch,
+                    current_mask_trusted=(row.mask_state == "observed" and frame_input.mask is not None
+                                          and bool(np.any(frame_input.mask))), recovery=recovery)
+            except Exception as exc:
+                self._fail(exc)
+            # Historical row is immutable evidence; the separate decision controls
+            # only opt-in display. Predictions need a fresh rendering from their
+            # labelled pose/current mask; never reuse a cached overlay here.
+            if display_decision.state != "measured":
+                overlay = None
         return FrameOutputV1(result=row, overlay_rgba=overlay, epoch=self._epoch, phase=phase, position=position,
                              process_ms=(time.perf_counter() - t0) * 1000.0, boundary_reason=boundary_reason,
-                             metadata_json=frame_input.metadata_json)
+                             metadata_json=frame_input.metadata_json, display_decision=display_decision)
 
     def _no_inference_row(self, frame: wc.FrameSpec, reason: str, mask_state: str, pose_state: str) -> wc.FrameResult:
         ctx = self._ctx
@@ -1121,6 +1188,8 @@ class FrameBoundary:
             elif inp.mask_sha256 is None or wg.mask_sha256(mask) != inp.mask_sha256:
                 mask_reason = "stale_mask: mask identity does not match its pixels"
             if mask_reason is not None:
+                if self._tracking_policy is not None:
+                    self._fail(wtp.PolicyRejected(mask_reason))
                 mask = None              # withheld -> the session's own safe mask-unavailable guard
         identity = {"frame_id": frame.frame_id, "source_frame_index": frame.source_frame_index,
                     "image_sha256": inp.image_sha256, "decoder_media_time_s": inp.decoder_media_time_s}

@@ -19,12 +19,15 @@ def main(argv=None):
     parser.add_argument("--role", choices=("primary_neural", "frozen_baseline"), required=True)
     parser.add_argument("--playback-fps", type=float, required=True)
     parser.add_argument("--placement", help="JSON object; scale/rotation_deg/offset_t_m/offset_b_m/opacity")
+    parser.add_argument("--experimental-tracking", action="store_true",
+        help="Require complete saved causal prefix and verified planar chart; no historical loss prediction")
     args = parser.parse_args(argv)
     try:
         result = export_saved_window(Workspace(args.workspace), run_id=args.run_id, role=args.role,
             project_path=args.project, expected_revision=args.expected_revision, bundle_path=args.bundle,
             bundle_sha256=args.bundle_sha256, admission_dir=args.admission_dir, output_dir=args.output,
-            playback_fps=args.playback_fps, placement=json.loads(args.placement) if args.placement else None)
+            playback_fps=args.playback_fps, placement=json.loads(args.placement) if args.placement else None,
+            experimental_tracking=args.experimental_tracking)
         print(json.dumps(dict(status="verified", output=str(args.output.resolve()), video=result["video"], frames=len(result["rows"]))))
         return 0
     except Exception as exc:

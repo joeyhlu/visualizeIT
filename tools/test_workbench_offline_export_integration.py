@@ -67,7 +67,7 @@ def plane_glb(path):
         + struct.pack("<I4s", len(binary), b"BIN\0") + binary)
 
 
-def make_fixture(root, *, timestamps=False, role="primary_neural"):
+def make_fixture(root, *, timestamps=False, role="primary_neural", schedule_start=2):
     """Create only synthetic inputs. Paths vary by host; pixel/pose controls do not."""
     root = Path(root)
     ws = cli.Workspace(root / "workspace")
@@ -105,8 +105,8 @@ def make_fixture(root, *, timestamps=False, role="primary_neural"):
         "media": {"root_id": "workbench", "path": "synthetic-inputs", "sha256": None, "bytes": None},
         "frames": frames, "intrinsics": {"status": "dataset_reference",
             "K": [200., 0., 63.5, 0., 200., 47.5, 0., 0., 1.], "source": "analytical synthetic camera"},
-        "onboarding": {"keyframe_ids": ["f0", "f1"], "selection": selection},
-        "scoring_frame_ids": ["f" + str(i) for i in range(2, count)],
+        "onboarding": {"keyframe_ids": ["f0"] if schedule_start == 1 else ["f0", "f1"], "selection": selection},
+        "scoring_frame_ids": ["f" + str(i) for i in range(schedule_start, count)],
         "evidence_role": "synthetic_test_only", "evaluator_inputs_read": False,
         "provenance": {"fixture_id": FIXTURE_ID, "not_model_execution": True}}
     clip = wc.ClipSpec.from_dict(clip_doc)
@@ -155,7 +155,7 @@ def make_fixture(root, *, timestamps=False, role="primary_neural"):
         "principal_point_origin": bundle.principal_point_origin, "effective_K": clip_doc["intrinsics"]["K"],
         "synthetic_declared_identity_only": True}
     rows = []
-    for index in range(2, count):
+    for index in range(schedule_start, count):
         frame = clip.frame("f" + str(index))
         state = "lost" if index == 3 else "recovering" if index == 4 else "tracking"
         frame_pose = pose.copy()
@@ -257,6 +257,7 @@ def use_video_source(fixture, *, registered=True):
 class OfflineVideoIntegrationTests(unittest.TestCase):
     def setUp(self):
         cache = ROOT / ".cache"
+        cache.mkdir(parents=True, exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(prefix="offline-export-test-", dir=cache)
         self.addCleanup(self.temp.cleanup)
         self.fixture = make_fixture(Path(self.temp.name))

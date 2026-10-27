@@ -19,13 +19,89 @@ from . import workbench_geometry as wg
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "workbench_offline_export_v1"
 SOURCES = (*ar.REPLAY_SOURCES, "bench/workbench_offline_export.py", "tools/workbench_offline_export.py",
-           "tools/design_context.py", "bench/vision.py")
+           "tools/design_context.py", "bench/vision.py", "bench/workbench_tracking_policy.py")
 MAX_FRAMES = 1000
 DEFAULT_PLACEMENT = dict(scale=1.0, rotation_deg=0.0, offset_t_m=0.0, offset_b_m=0.0, opacity=1.0)
 
 
 def refuse(reason):
     raise ar.Refused("refused", reason)
+
+
+def _saved_display_decision(row, *, current_mask_trusted, epoch=0):
+    """Adapt authenticated historical evidence without retrospectively re-running tracking.
+
+    A saved tracking row is measured evidence. Legacy loss never authorizes a prediction,
+    and the historical schema cannot carry proposed prediction candidates.
+    """
+    from .workbench_tracking_policy import DisplayDecision
+    measured = row.pose_state == "tracking" and row.pose is not None and row.pose_units == "metric"
+    state = "measured" if measured else "recovering" if row.pose_state == "recovering" else "lost"
+    return DisplayDecision(state=state, pose=tuple(np.asarray(row.pose, dtype=float).ravel()) if measured else None,
+        opacity=1.0 if measured and current_mask_trusted else 0.0,
+        reason="saved_accepted_measurement" if measured and current_mask_trusted else
+               "current_observed_mask_unavailable" if measured else "saved_" + row.pose_state,
+        age_frames=0 if measured else None, age_ms=None, epoch=epoch, frame_id=row.frame_id,
+        accepted_measured=measured, current_mask_trusted=current_mask_trusted)
+
+
+def _anchor_integrity(artwork):
+    """Validate the actual persistent anchor consumed by composition, not a summary label."""
+    marker = artwork.marker
+    vertices, faces = np.asarray(artwork.vertices), np.asarray(artwork.faces)
+    fid = marker.get("face_id")
+    bary = np.asarray(marker.get("barycentric"), dtype=np.float64)
+    basis = np.asarray([marker.get(k) for k in ("tangent", "bitangent", "normal")], dtype=np.float64)
+    size = marker.get("size_object_units")
+    if (type(fid) is not int or not 0 <= fid < len(faces) or bary.shape != (3,)
+            or not np.isfinite(bary).all() or (bary < 0).any() or not np.isclose(bary.sum(), 1., atol=1e-8)
+            or basis.shape != (3, 3) or not np.isfinite(basis).all()
+            or not np.allclose(basis @ basis.T, np.eye(3), atol=1e-7)
+            or not np.allclose(np.cross(basis[0], basis[1]), basis[2], atol=1e-7)
+            or type(size) not in (float, int) or not math.isfinite(size) or size <= 0
+            or vertices.ndim != 2 or vertices.shape[1] != 3 or not np.isfinite(vertices).all()):
+        refuse("anchor/chart integrity invalid")
+    return wc.canonical_sha256(ar._plain(marker))
+
+
+def _experimental_admission(clip, run, binding, artwork, bundle, K):
+    """Refuse unsupported late windows; no checkpoint/backend restoration is implied."""
+    from .workbench_tracking_policy import SurfaceAdmission
+    frames = [frame.frame_id for frame in clip.frames]
+    seed = frames.index(binding["seed_frame_id"])
+    scheduled = list(run.scheduled_frame_ids)
+    end = frames.index(scheduled[-1])
+    if scheduled != frames[seed + 1:end + 1]:
+        refuse("experimental tracking requires the complete causal prefix after the authorized seed; checkpoint restore unsupported")
+    # This exporter supports a tangent plane, not arbitrary curved-surface charts.
+    # Admit a real planar chart only after checking the geometry itself.
+    marker = artwork.marker
+    n = np.asarray(marker["normal"], float)
+    center = np.asarray(marker["barycentric"], float) @ artwork.vertices[artwork.faces[marker["face_id"]]]
+    distances = (artwork.vertices - center) @ n
+    patch = artwork.patch
+    if (np.max(np.abs(distances)) > 1e-7 or len(patch.get("folded_faces", []))
+            or len(patch["faces"]) == 0 or patch.get("overlap_counts") is None
+            or np.max(patch["overlap_counts"]) > 1):
+        refuse("experimental export requires a verified planar, unfolded, overlap-free chart")
+    chart = dict(chart_id="saved-planar-chart", domain="plane", orientation_valid=True,
+        overlap_free=True, distortion=1.0, max_distortion=1.0,
+        marker=ar._plain(marker), patch=ar._plain(patch), tolerance_m=1e-7)
+    anchor = dict(anchor_id="saved-persistent-anchor", geometry_sha256=bundle.glb_sha256,
+        chart_id=chart["chart_id"], marker=ar._plain(marker))
+    calibration_sha = wc.canonical_sha256(dict(K=K.ravel().tolist(), width=clip.width, height=clip.height,
+        principal_point_origin=bundle.principal_point_origin))
+    admission = SurfaceAdmission(units="metric", metric_provenance=bundle.metric_provenance,
+        calibration_sha256=calibration_sha, geometry_sha256=bundle.glb_sha256,
+        anchor_sha256=wc.canonical_sha256(anchor), chart_sha256=wc.canonical_sha256(chart))
+    admission.verify(calibration_sha256=calibration_sha, geometry_sha256=bundle.glb_sha256,
+        anchor_record=anchor, chart_record=chart)
+    return dict(mode="experimental_saved_measurements_v1", causal_prefix_frame_ids=scheduled,
+        prefix_verified=True, checkpoint_restored=False, epoch=0,
+        surface=dict(units="metres", metric_provenance=bundle.metric_provenance,
+            calibration_sha256=calibration_sha, geometry_sha256=bundle.glb_sha256,
+            anchor_sha256=wc.canonical_sha256(anchor), chart_sha256=wc.canonical_sha256(chart)),
+        predictions_enabled=False, prediction_limitation="Historical loss/unavailability cannot authorize predictions.")
 
 
 def _publish_new_directory(staging, output):
@@ -135,7 +211,8 @@ def _project(path, revision):
 
 
 def export_saved_window(workspace, *, run_id, role, project_path, expected_revision, bundle_path,
-                        bundle_sha256, admission_dir, output_dir, playback_fps, placement=None, repo_root=ROOT):
+                        bundle_sha256, admission_dir, output_dir, playback_fps, placement=None, repo_root=ROOT,
+                        experimental_tracking=False):
     """Publish a new derived directory only after complete video decode and input reauthentication."""
     from . import workbench_cli as cli, workbench_frame_boundary as fb, workbench_neural as wn
     from .vision import cv2
@@ -144,6 +221,8 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
     if type(playback_fps) not in (int, float) or not math.isfinite(playback_fps) or not 0.1 <= playback_fps <= 120:
         refuse("explicit CFR playback FPS must be between 0.1 and 120")
     placement = placement_values(placement)
+    if type(experimental_tracking) is not bool:
+        refuse("experimental_tracking must be boolean")
     output = Path(output_dir)
     if output.is_symlink() or output.exists():
         refuse("output already exists")
@@ -216,6 +295,24 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
     saved_sha = saved.pop("record_sha256", None)
     if artwork.sha256 != saved_sha or wc.canonical_json(ar._plain(artwork.record)) != wc.canonical_json(saved):
         refuse("saved anchor/original artwork record differs")
+    anchor_sha = _anchor_integrity(artwork)
+    tracking = (_experimental_admission(clip, run, binding, artwork, bundle, K) if experimental_tracking else
+        dict(mode="legacy_saved_context", prefix_verified=False, checkpoint_restored=False, epoch=0,
+             predictions_enabled=False, limitation="Authenticated historical rows; causal prefix is not replayed."))
+    from .workbench_tracking_policy import POLICY_VERSION
+    tracking["decision_contract_version"] = POLICY_VERSION
+    if experimental_tracking:
+        for row in rows:
+            epoch = row.evidence.get("epoch", 0)
+            if type(epoch) is not int or epoch != tracking["epoch"]:
+                refuse("saved tracking epoch differs; cross-epoch replay is unsupported")
+        tracking["saved_evidence_identity"] = dict(source_sha256=clip_sha,
+            mask_sha256=wc.canonical_sha256(recorded_masks),
+            head_sha256=rows[0].backend_identity.get("installed_head_sha256") or
+                rows[0].backend_identity.get("base_checkpoint_sha256"),
+            config_sha256=wc.canonical_sha256(ar._plain(run.config)),
+            policy_sha256=ar._sha_file(Path(repo_root) / "bench/workbench_tracking_policy.py"),
+            saved_rows_sha256=state["files"]["results.jsonl"], epoch=0)
     project, rgba, project_sha, png_sha = _project(project_path, expected_revision)
     sources = service._source_hashes(SOURCES)
     # Conservative incompressible frame allowance + container/index/sidecar headroom.
@@ -242,16 +339,21 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                 if (row.mask_frame_id != row.frame_id or mask is None or mask_ident["mask_sha256"] != row.mask_sha256):
                     refuse("observed row mask identity differs")
             reason, corners, composite = "saved_pose_or_fresh_mask_unavailable", None, rgb
-            if row.pose_state == "tracking" and row.pose is not None and row.pose_units == "metric" and row.mask_state == "observed":
-                composite, reason, corners = compose_planar(rgb, rgba, mask, np.asarray(row.pose, np.float64), K,
-                    artwork.vertices, artwork.faces, artwork.marker, placement)
+            trusted = row.mask_state == "observed" and mask is not None and bool(np.asarray(mask, bool).any())
+            decision = _saved_display_decision(row, current_mask_trusted=trusted, epoch=tracking["epoch"])
+            if decision.state == "measured" and decision.accepted_measured and decision.current_mask_trusted:
+                if _anchor_integrity(artwork) != anchor_sha:
+                    refuse("anchor/chart changed before composition")
+                composite, reason, corners = compose_planar(rgb, rgba, mask, np.asarray(decision.pose, np.float64).reshape(4, 4), K,
+                    artwork.vertices, artwork.faces, artwork.marker, {**placement, "opacity": placement["opacity"] * decision.opacity})
             digest = wg.array_sha256(composite)
             writer.write(np.ascontiguousarray(composite[:, :, ::-1]))
             if video.exists() and video.stat().st_size > (index+1) * frame_allowance + (1 << 20):
                 refuse("writer exceeded conservative headroom")
             workspace.require_budget(extra_derived=(len(ids)-index-1)*frame_allowance + (4 << 20))
             records.append(dict(output_index=index, original=row.to_dict(), source_rgb_sha256=image_ident["image_sha256"],
-                                expected_rgb_sha256=digest, render_reason=reason, projected_corners_px=corners))
+                                display_decision=ar._plain(decision.to_dict()), expected_rgb_sha256=digest,
+                                render_reason=reason, projected_corners_px=corners))
         writer.release()
         writer = None
         reader.close()
@@ -278,6 +380,12 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
         finally:
             decoded.release()
         after = service._load_run(run_id)
+        if _anchor_integrity(artwork) != anchor_sha:
+            refuse("anchor/chart changed before publication")
+        if experimental_tracking:
+            current_tracking = _experimental_admission(clip, run, binding, artwork, bundle, K)
+            if current_tracking["surface"] != tracking["surface"]:
+                refuse("experimental surface identity changed before publication")
         fresh = cli.MaskStore(workspace, clip.clip_id, mask_set)
         if (after["files"] != state["files"] or service._source_hashes(SOURCES) != sources
                 or ar._sha_file(workspace.clip_path(clip.clip_id), ar.MAX_SMALL_JSON_BYTES) != clip_sha
@@ -302,6 +410,19 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
             reasons[reason] = reasons.get(reason, 0) + 1
         rendered = reasons.get("rendered_planar_approximation", 0)
         recorded_identity = rows[0].backend_identity
+        states = {key: 0 for key in ("accepted_measurements", "proposed_predictions", "recovering", "lost", "unavailable", "render_unavailable")}
+        for record in records:
+            original, decision = record["original"], record["display_decision"]
+            if decision["accepted_measured"]:
+                states["accepted_measurements"] += 1
+            elif decision["state"] == "predicted":
+                states["proposed_predictions"] += 1
+            elif original["pose_state"] in ("recovering", "lost"):
+                states[original["pose_state"]] += 1
+            else:
+                states["unavailable"] += 1
+            if record["render_reason"] != "rendered_planar_approximation":
+                states["render_unavailable"] += 1
         manifest = dict(schema=VERSION, source="offline_saved_pose_planar_artwork", new_neural_inference=False,
             new_pose_estimation=False, weights_loaded=False, quality_claim=False, audio_copied=False,
             limitation="Tangent-plane approximation; no curved attachment, mesh occlusion, or surface certainty.",
@@ -309,7 +430,8 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
             source_clip=dict(clip_id=clip.clip_id, source_kind=clip.source_kind, evidence_role=clip.evidence_role,
                 clock_kind=clip.clock_kind, clock_source=clip.clock_source, provenance=ar._plain(clip.provenance)),
             frame_accounting=dict(scheduled=len(ids), exported=len(records), rendered=rendered,
-                suppressed=len(records)-rendered, counts_by_render_reason=reasons, quality_metrics=False),
+                suppressed=len(records)-rendered, counts_by_render_reason=reasons, quality_metrics=False, **states),
+            tracking_policy=tracking,
             playback=dict(codec="FFV1", container="AVI", fps=float(playback_fps), timing="explicit CFR playback; original times only in rows",
                           verified_header_fps=decoded_fps, width=clip.width, height=clip.height, frames=len(records)),
             project=dict(project_id=project["projectId"], revision=expected_revision, file_sha256=project_sha, png_sha256=png_sha),

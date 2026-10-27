@@ -480,3 +480,115 @@ class PortableBoundaryTests(unittest.TestCase):
             self.assertGreater(len(xs), 100)
             self.assertTrue(observed[ys, xs].all())
             np.testing.assert_allclose([xs.mean(), ys.mean()], expected_pixel, atol=2)
+
+class ExperimentalPolicyBoundaryTests(unittest.TestCase):
+    def setup_policy(self, *, clock_kind='timestamp_seconds'):
+        from bench import workbench_tracking_policy as tp
+        context, adapter, backend = neural_fixture(bundle=True, clock_kind=clock_kind)
+        chart = dict(chart_id='chart', domain='plane', orientation_valid=True,
+                     overlap_free=True, distortion=0., max_distortion=.05)
+        anchor = dict(anchor_id='anchor', chart_id='chart', geometry_sha256='a'*64)
+        admission = tp.SurfaceAdmission('metric', 'dataset_metric_cad',
+            wc.canonical_sha256(list(context.K)), 'a'*64,
+            wc.canonical_sha256(anchor), wc.canonical_sha256(chart))
+        boundary = fb.FrameBoundary(tracking_policy=tp.TrackingPolicy(allow_prediction=True),
+            surface_admission=admission, anchor_record=anchor, chart_record=chart)
+        self.addCleanup(boundary.close)
+        return context, adapter, backend, boundary
+
+    def test_optin_real_boundary_emits_separate_decision_and_reset_clears_it(self):
+        context, adapter, backend, boundary = self.setup_policy()
+        boundary.initialize(context, adapter)
+        first = boundary.process(packet(context, 'f1'))
+        self.assertEqual(first.display_decision.state, 'measured')
+        self.assertEqual(first.result.pose_state, 'tracking')
+        first.result.validate()
+        boundary.reset()
+        self.assertEqual(boundary.process(packet(context, 'f1')).display_decision.epoch, 1)
+        self.assertEqual(backend.resets, 1)
+
+    def test_default_boundary_keeps_none_decision(self):
+        context, adapter, backend = neural_fixture()
+        boundary = fb.FrameBoundary(); self.addCleanup(boundary.close)
+        boundary.initialize(context, adapter)
+        self.assertIsNone(boundary.process(packet(context)).display_decision)
+
+    def test_optin_invalid_rgb_is_integrity_refusal_and_not_tracking_loss(self):
+        context, adapter, backend, boundary = self.setup_policy()
+        boundary.initialize(context, adapter)
+        with self.assertRaises(fb.BoundaryFailure):
+            boundary.process(packet(context, 'f1', image_sha256='f'*64))
+        self.assertEqual((backend.calls, backend.closes), ([], 1))
+
+    def test_optin_suppresses_without_current_mask_and_never_rearms_seed(self):
+        context, adapter, backend, boundary = self.setup_policy()
+        boundary.initialize(context, adapter)
+        boundary.process(packet(context, 'f1'))
+        missing = boundary.process(packet(context, 'f2', mask=None))
+        self.assertEqual((missing.display_decision.state, missing.overlay_rgba), ('lost', None))
+        later = boundary.process(packet(context, 'f3'))
+        self.assertEqual(later.display_decision.state, 'recovering')
+        self.assertIsNone(later.overlay_rgba)
+        # Historical measured row remains evidence; it cannot bypass the new
+        # independent display policy's explicit user re-onboarding requirement.
+        self.assertEqual(later.result.pose_state, 'tracking')
+        self.assertEqual(backend.resets, 0)
+
+    def test_optin_rejects_relative_geometry_before_tracker_open(self):
+        from bench import workbench_tracking_policy as tp
+        context, adapter, tracker = relative_fixture()
+        boundary = fb.FrameBoundary(tracking_policy=tp.TrackingPolicy())
+        with self.assertRaises(fb.BoundaryRejected):
+            boundary.initialize(context, adapter)
+        self.assertEqual(boundary.state, 'closed')
+
+    def test_optin_requires_surface_calibration_anchor_and_full_prefix(self):
+        for bad in ('calibration', 'anchor', 'prefix'):
+            with self.subTest(bad=bad):
+                context, adapter, backend, boundary = self.setup_policy()
+                if bad == 'calibration':
+                    boundary._surface_admission = dataclasses.replace(boundary._surface_admission,
+                        calibration_sha256='f'*64)
+                elif bad == 'anchor':
+                    boundary._anchor_record['anchor_id'] = 'changed'
+                else:
+                    # The legacy context accepts skipped scheduled frames. The
+                    # opt-in policy requires the entire seed-to-scoring history.
+                    run = dataclasses.replace(context.run, scheduled_frame_ids=('f3',))
+                    binding = fb.neural_binding(context.clip, run, family='synthetic-family', bundle=backend.bundle)
+                    context = fb.FrameContextV1.build(context.clip, run, context.role, binding)
+                    # Its generated warmup is complete, so remove a warmup frame
+                    # only through a context forgery (also refused canonically).
+                    context = dataclasses.replace(context, permitted_order=('f2', 'f3'))
+                with self.assertRaises(fb.BoundaryError):
+                    boundary.initialize(context, adapter)
+                self.assertEqual(backend.calls, [])
+
+
+    def test_optin_policy_config_drift_refuses_process_and_reset_before_backend(self):
+        for action in ('process', 'reset'):
+            context, adapter, backend, boundary = self.setup_policy()
+            identity = boundary.initialize(context, adapter)
+            self.assertIn('tracking_policy_sha256', identity)
+            boundary._tracking_policy._allow_prediction = False
+            with self.assertRaises(fb.BoundaryRejected):
+                if action == 'process':
+                    boundary.process(packet(context, 'f1'))
+                else:
+                    boundary.reset()
+            self.assertEqual((backend.calls, backend.resets, boundary.cursor), ([], 0, 0))
+
+
+    def test_optin_invalid_mask_identity_refuses_before_backend(self):
+        for kind in ('hash', 'frame', 'dimensions'):
+            with self.subTest(kind=kind):
+                context, adapter, backend, boundary = self.setup_policy()
+                boundary.initialize(context, adapter)
+                boundary.process(packet(context, 'f1'))
+                kwargs = ({'mask_sha256': 'f'*64} if kind == 'hash' else
+                          {'mask_frame_id': 'f1'} if kind == 'frame' else
+                          {'mask': np.ones((2,2), bool)})
+                with self.assertRaises(fb.BoundaryFailure):
+                    boundary.process(packet(context, 'f2', **kwargs))
+                self.assertEqual(len(backend.calls), 1)
+                self.assertEqual((backend.closes, boundary.state), (1, 'failed'))
