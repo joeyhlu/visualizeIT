@@ -28,6 +28,7 @@ requires local weights and is scheduled by the parent operator only.
 from __future__ import annotations
 
 import copy
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 import gc
 import hashlib
@@ -965,10 +966,12 @@ class WorkbenchIntegerRefiner:
     correspondences, deterministic PnP; returns every intermediate as arrays.
     """
 
-    def __init__(self, network, device: str = "cpu", *, renderer_factory: Callable | None = None):
+    def __init__(self, network, device: str = "cpu", *, renderer_factory: Callable | None = None,
+                 profiler=None):
         self.network = network
         self.device = device
         self.renderer_factory = renderer_factory
+        self.profiler = profiler
         self._renderers: dict[str, Any] = {}
 
     def _renderer(self, case):
@@ -986,77 +989,92 @@ class WorkbenchIntegerRefiner:
         return getattr(renderer, "metadata", None)
 
     def trace(self, case: Mapping[str, Any]) -> dict:
-        import torch
-        from .vision import cv2
-        from . import quality_gotrack as qg
-        qg.upstream_path()
-        from utils import data_util, misc, structs  # type: ignore
-        rgb = case["rgb"]
-        mask = case["mask"]
-        K = np.asarray(case["native_K"], dtype=np.float64)
-        pose_m = np.asarray(case["initial_pose_m"], dtype=np.float64)
-        pose_mm = pose_m.copy()
-        pose_mm[:3, 3] *= 1000.0
-        renderer = self._renderer(case)
-        h, w = rgb.shape[:2]
-        camera = structs.PinholePlaneCameraModel(width=w, height=h, f=(K[0, 0], K[1, 1]), c=(K[0, 2], K[1, 2]),
-                                                 T_world_from_eye=np.eye(4))
-        image = torch.from_numpy(np.ascontiguousarray(rgb)).permute(2, 0, 1).float()[None] / 255
-        input_mask = torch.from_numpy((np.asarray(mask) > 0).copy()).float()[None]
+        timing = (self.profiler.trace({"rng_seed": case.get("rng_seed", 0)})
+                  if self.profiler is not None else nullcontext(None))
+        with timing as observation:
+            return self._trace(case, observation)
+
+    def _trace(self, case: Mapping[str, Any], observation) -> dict:
+        stage = observation.stage if observation is not None else lambda name: nullcontext()
+        with stage("preparation"):
+            import torch
+            from .vision import cv2
+            from . import quality_gotrack as qg
+            qg.upstream_path()
+            from utils import data_util, misc, structs  # type: ignore
+            rgb = case["rgb"]
+            mask = case["mask"]
+            K = np.asarray(case["native_K"], dtype=np.float64)
+            pose_m = np.asarray(case["initial_pose_m"], dtype=np.float64)
+            pose_mm = pose_m.copy()
+            pose_mm[:3, 3] *= 1000.0
+            renderer = self._renderer(case)
+            h, w = rgb.shape[:2]
+            camera = structs.PinholePlaneCameraModel(width=w, height=h, f=(K[0, 0], K[1, 1]), c=(K[0, 2], K[1, 2]),
+                                                     T_world_from_eye=np.eye(4))
+            image = torch.from_numpy(np.ascontiguousarray(rgb)).permute(2, 0, 1).float()[None] / 255
+            input_mask = torch.from_numpy((np.asarray(mask) > 0).copy()).float()[None]
         with torch.inference_mode():
-            data, cameras, crop_from_orig = data_util.compute_gotrack_inputs_from_init_poses(
-                input_rgbs=image, input_cameras=[camera],
-                init_poses_cam_from_model=torch.from_numpy(pose_mm.astype(np.float32))[None],
-                renderer=renderer, obj_ids=[int(case["obj_id"])], object_vertices=[renderer.vertices_m * 1000],
-                crop_size=(280, 280), crop_rel_pad=.1, cropping_type="perspective_2d_box", ssaa_factor=1.,
-                background_type="gray", input_masks=input_mask)
-            template = data["templates"]
-            crop_k = misc.get_intrinsic_matrix(cameras[0])
-            flow_t, conf_t = self.network(data["crop_rgbs"].to(self.device), template.rgbs.to(self.device),
-                                          template.masks.to(self.device))
-        flow = flow_t[0].permute(1, 2, 0).float().cpu().numpy()
-        conf = conf_t[0].float().cpu().numpy()
-        (crop_pose, xyz, target, native_uv, confidence, valid, integer_pixels,
-         _xyz_cam) = qg._integer_profile_correspondences(template.depths, crop_k, crop_from_orig[0], pose_mm, flow,
-                                                          conf, template.masks[0], data["crop_masks"][0], K)
-        retained = np.flatnonzero(valid.ravel()).astype(np.int64)
-        obj = xyz[valid].astype(np.float64)
-        tgt = target[valid].astype(np.float64)
-        result = {"solver_state": np.array(0, np.int8), "ransac_inliers": np.zeros(0, np.int64),
-                  "solved_native_pose_m": np.full((4, 4), np.nan)}
-        if len(obj) >= 24:
-            ids = np.linspace(0, len(obj) - 1, min(len(obj), 10000), dtype=int)
-            cv2.setRNGSeed(int(case.get("rng_seed", 0)))
-            rvec0 = cv2.Rodrigues(crop_pose[:3, :3])[0]
-            ok, rvec, tvec, inl = cv2.solvePnPRansac(obj[ids], tgt[ids], crop_k, None, rvec0,
-                                                     crop_pose[:3, 3].copy(), useExtrinsicGuess=True,
-                                                     iterationsCount=100, reprojectionError=3.0,
-                                                     flags=cv2.SOLVEPNP_ITERATIVE)
-            if ok and inl is not None and len(inl) >= 6:
-                chosen = ids[inl.ravel()]
-                rvec, tvec = cv2.solvePnPRefineLM(obj[chosen], tgt[chosen], crop_k, None, rvec, tvec)
-                refined = np.eye(4)
-                refined[:3, :3] = cv2.Rodrigues(rvec)[0]
-                refined[:3, 3] = tvec.ravel()
-                native = np.linalg.inv(np.asarray(crop_from_orig[0], dtype=np.float64)) @ refined
-                native[:3, 3] /= 1000.0
-                result = {"solver_state": np.array(1, np.int8), "ransac_inliers": np.sort(chosen).astype(np.int64),
-                          "solved_native_pose_m": native}
-            else:
-                result["solver_state"] = np.array(-1, np.int8)
-        return {
-            "crop_rgbs": data["crop_rgbs"].float().cpu().numpy(),
-            "crop_masks": np.asarray(data["crop_masks"].float().cpu().numpy()),
-            "template_rgbs": template.rgbs.float().cpu().numpy(),
-            "template_masks": np.asarray(template.masks.cpu().numpy()).astype(bool),
-            "template_depths_mm": template.depths.float().cpu().numpy(),
-            "crop_k": np.asarray(crop_k, dtype=np.float64),
-            "crop_from_orig": np.asarray(crop_from_orig[0], dtype=np.float64),
-            "flow": flow.astype(np.float32), "confidence": conf.astype(np.float32),
-            "confidence_mask": conf > CONFIDENCE_THRESHOLD,
-            "retained_indices": retained, "native_uv": native_uv.astype(np.float64),
-            **result,
-        }
+            with stage("crop_template"):
+                data, cameras, crop_from_orig = data_util.compute_gotrack_inputs_from_init_poses(
+                    input_rgbs=image, input_cameras=[camera],
+                    init_poses_cam_from_model=torch.from_numpy(pose_mm.astype(np.float32))[None],
+                    renderer=renderer, obj_ids=[int(case["obj_id"])], object_vertices=[renderer.vertices_m * 1000],
+                    crop_size=(280, 280), crop_rel_pad=.1, cropping_type="perspective_2d_box", ssaa_factor=1.,
+                    background_type="gray", input_masks=input_mask)
+                template = data["templates"]
+                crop_k = misc.get_intrinsic_matrix(cameras[0])
+            with stage("network_with_input_transfers"):
+                flow_t, conf_t = self.network(data["crop_rgbs"].to(self.device), template.rgbs.to(self.device),
+                                              template.masks.to(self.device))
+        with stage("flow_conf_to_host"):
+            flow = flow_t[0].permute(1, 2, 0).float().cpu().numpy()
+            conf = conf_t[0].float().cpu().numpy()
+        with stage("correspondences"):
+            (crop_pose, xyz, target, native_uv, confidence, valid, integer_pixels,
+             _xyz_cam) = qg._integer_profile_correspondences(template.depths, crop_k, crop_from_orig[0], pose_mm, flow,
+                                                              conf, template.masks[0], data["crop_masks"][0], K)
+            retained = np.flatnonzero(valid.ravel()).astype(np.int64)
+            obj = xyz[valid].astype(np.float64)
+            tgt = target[valid].astype(np.float64)
+        with stage("pnp_solver"):
+            result = {"solver_state": np.array(0, np.int8), "ransac_inliers": np.zeros(0, np.int64),
+                      "solved_native_pose_m": np.full((4, 4), np.nan)}
+            if len(obj) >= 24:
+                ids = np.linspace(0, len(obj) - 1, min(len(obj), 10000), dtype=int)
+                cv2.setRNGSeed(int(case.get("rng_seed", 0)))
+                rvec0 = cv2.Rodrigues(crop_pose[:3, :3])[0]
+                ok, rvec, tvec, inl = cv2.solvePnPRansac(obj[ids], tgt[ids], crop_k, None, rvec0,
+                                                         crop_pose[:3, 3].copy(), useExtrinsicGuess=True,
+                                                         iterationsCount=100, reprojectionError=3.0,
+                                                         flags=cv2.SOLVEPNP_ITERATIVE)
+                if ok and inl is not None and len(inl) >= 6:
+                    chosen = ids[inl.ravel()]
+                    rvec, tvec = cv2.solvePnPRefineLM(obj[chosen], tgt[chosen], crop_k, None, rvec, tvec)
+                    refined = np.eye(4)
+                    refined[:3, :3] = cv2.Rodrigues(rvec)[0]
+                    refined[:3, 3] = tvec.ravel()
+                    native = np.linalg.inv(np.asarray(crop_from_orig[0], dtype=np.float64)) @ refined
+                    native[:3, 3] /= 1000.0
+                    result = {"solver_state": np.array(1, np.int8), "ransac_inliers": np.sort(chosen).astype(np.int64),
+                              "solved_native_pose_m": native}
+                else:
+                    result["solver_state"] = np.array(-1, np.int8)
+        with stage("diagnostic_materialization"):
+            diagnostic = {
+                "crop_rgbs": data["crop_rgbs"].float().cpu().numpy(),
+                "crop_masks": np.asarray(data["crop_masks"].float().cpu().numpy()),
+                "template_rgbs": template.rgbs.float().cpu().numpy(),
+                "template_masks": np.asarray(template.masks.cpu().numpy()).astype(bool),
+                "template_depths_mm": template.depths.float().cpu().numpy(),
+                "crop_k": np.asarray(crop_k, dtype=np.float64),
+                "crop_from_orig": np.asarray(crop_from_orig[0], dtype=np.float64),
+                "flow": flow.astype(np.float32), "confidence": conf.astype(np.float32),
+                "confidence_mask": conf > CONFIDENCE_THRESHOLD,
+                "retained_indices": retained, "native_uv": native_uv.astype(np.float64),
+                **result,
+            }
+        return diagnostic
 
     def close(self):
         errors = []
