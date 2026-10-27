@@ -275,8 +275,10 @@ def prepare_mesh_artwork(rgba, marker, placement=None):
 
 
 def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker,
-                 placement=None, *, max_chart_stretch=None):
+                 placement=None, *, max_chart_stretch=None, artwork_region_raster=False):
     """Actual registered mesh visibility and straight-alpha, half-up RGB composition."""
+    if type(artwork_region_raster) is not bool:
+        refuse("artwork_region_raster must be boolean")
     p = placement_values(placement)
     limit = wg.check_chart_stretch_limit(max_chart_stretch)
     if not isinstance(rgb, np.ndarray) or rgb.dtype != np.uint8 or rgb.ndim != 3 or rgb.shape[2] != 3:
@@ -286,7 +288,8 @@ def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker
     texture, derived = prepare_mesh_artwork(rgba, marker, p)
     h, w = rgb.shape[:2]
     rendered = wg.render_marker_rgba(vertices, faces, face_support, derived, texture, K, pose,
-                                    w, h, mask, max_chart_stretch=limit)
+                                    w, h, mask, max_chart_stretch=limit,
+                                    artwork_region_raster=artwork_region_raster)
     overlay, stats = rendered["rgba"], dict(rendered["stats"])
     alpha = overlay[:, :, 3].astype(np.float64) * (p["opacity"] / 255.0)
     alpha *= np.asarray(mask, bool)
@@ -301,7 +304,7 @@ def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker
 def export_saved_window(workspace, *, run_id, role, project_path, expected_revision, bundle_path,
                         bundle_sha256, admission_dir, output_dir, playback_fps, placement=None, repo_root=ROOT,
                         experimental_tracking=False, surface_mode="planar", max_chart_stretch=None,
-                        mesh_anchor_path=None):
+                        mesh_anchor_path=None, artwork_region_raster=False):
     """Publish a new derived directory only after complete video decode and input reauthentication."""
     from . import workbench_cli as cli, workbench_frame_boundary as fb, workbench_neural as wn
     from .vision import cv2
@@ -312,6 +315,10 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
     placement = placement_values(placement)
     if surface_mode not in ("planar", "mesh"):
         refuse("surface_mode must be planar or mesh")
+    if type(artwork_region_raster) is not bool:
+        refuse("artwork_region_raster must be boolean")
+    if artwork_region_raster and surface_mode != "mesh":
+        refuse("artwork_region_raster requires mesh surface mode")
     if surface_mode == "planar" and max_chart_stretch is not None:
         refuse("max_chart_stretch requires mesh surface mode")
     if mesh_anchor_path is not None and surface_mode != "mesh":
@@ -458,6 +465,8 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                 sampler="floor_clamp_nearest_texel_cells; PNG top=+bitangent",
                 padding="transparent centered square, no resizing; odd extra bottom/right",
                 support_source="metric CAD geometry (not observation-derived)")
+            if artwork_region_raster:
+                identity["artwork_region_raster"] = True
             if mesh_anchor is not None:
                 identity["mesh_anchor_revision_sha256"] = wc.canonical_sha256(mesh_anchor)
             return identity
@@ -501,7 +510,7 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                         np.asarray(decision.pose, np.float64).reshape(4, 4), K, artwork.vertices,
                         artwork.faces, artwork.support, mesh_marker,
                         {**placement, "opacity": placement["opacity"] * decision.opacity},
-                        max_chart_stretch=max_chart_stretch)
+                        max_chart_stretch=max_chart_stretch, artwork_region_raster=artwork_region_raster)
                 else:
                     composite, reason, corners = compose_planar(rgb, rgba, mask, np.asarray(decision.pose, np.float64).reshape(4, 4), K,
                         artwork.vertices, artwork.faces, artwork.marker, {**placement, "opacity": placement["opacity"] * decision.opacity})
