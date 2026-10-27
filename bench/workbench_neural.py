@@ -28,7 +28,7 @@ requires local weights and is scheduled by the parent operator only.
 from __future__ import annotations
 
 import copy
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 import gc
 import hashlib
@@ -958,6 +958,61 @@ class ForwardCounter:
         self._handles = []
 
 
+FRAME_PREPARATION_MAX_TENSOR_BYTES = 128 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class _FrameTensorBytes:
+    """Owned immutable CPU values; upstream receives a fresh writable buffer.
+
+    Byte strides preserve the original Torch result layout, including its
+    channel-first noncontiguous view. No live Tensor or NumPy array is retained.
+    """
+    storage: bytes
+    shape: tuple
+    strides: tuple
+    dtype: str
+    digest: str
+
+    @classmethod
+    def freeze(cls, tensor):
+        values = tensor.numpy()
+        shape, strides, dtype = tuple(values.shape), tuple(values.strides), values.dtype.str
+        length = cls._length(shape, strides, dtype)
+        owned = bytearray(length)
+        np.ndarray(shape, dtype=values.dtype, buffer=owned, strides=strides)[...] = values
+        storage = bytes(owned)
+        digest = cls._digest(storage, shape, strides, dtype)
+        return cls(storage, shape, strides, dtype, digest)
+
+    @staticmethod
+    def _digest(storage, shape, strides, dtype):
+        digest = hashlib.sha256(repr((shape, strides, dtype)).encode("ascii"))
+        digest.update(storage)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _length(shape, strides, dtype):
+        if (np.dtype(dtype) != np.dtype(np.float32) or not 1 <= len(shape) <= 4
+                or len(shape) != len(strides) or any(type(size) is not int or size <= 0 for size in shape)
+                or any(type(stride) is not int or stride < 0 for stride in strides)):
+            raise ValueError("preparation reuse requires bounded float32 CPU layouts")
+        length = 4 + sum((size - 1) * stride for size, stride in zip(shape, strides))
+        if length > FRAME_PREPARATION_MAX_TENSOR_BYTES:
+            raise ValueError("frame preparation exceeds the 128 MiB per-tensor limit")
+        return length
+
+    def restore(self, torch):
+        if (type(self.storage) is not bytes or self._length(self.shape, self.strides, self.dtype) != len(self.storage)
+                or self._digest(
+                self.storage, self.shape, self.strides, self.dtype) != self.digest):
+            raise ValueError("frame preparation integrity check failed")
+        # bytearray owns writable memory; no Tensor ever aliases retained bytes.
+        values = np.ndarray(self.shape, dtype=np.dtype(self.dtype),
+                            buffer=bytearray(self.storage), strides=self.strides)
+        return torch.from_numpy(values)
+
+
 class WorkbenchIntegerRefiner:
     """Separate dispatch for ``workbench_integer_metric_v1`` (old registry untouched).
 
@@ -973,6 +1028,41 @@ class WorkbenchIntegerRefiner:
         self.renderer_factory = renderer_factory
         self.profiler = profiler
         self._renderers: dict[str, Any] = {}
+        self._preparation_scope = None
+        self._prepared_frame = None
+
+    @contextmanager
+    def preparation_scope(self, context_factory):
+        """Experimental reuse only for one backend estimate, cleared on all exits.
+
+        The callback supplies current backend invariants on every iteration;
+        neither a frame ID nor a frozen record grants cross-frame reuse.
+        """
+        if self._preparation_scope is not None:
+            raise ValueError("frame preparation scopes cannot overlap")
+        self._preparation_scope = context_factory
+        self._prepared_frame = None
+        try:
+            yield
+        finally:
+            self._prepared_frame = None
+            self._preparation_scope = None
+
+    def _frame_inputs(self, case, torch):
+        certificate = wc.canonical_sha256({
+            "rgb": array_digest(case["rgb"]), "mask": array_digest(case["mask"]),
+            "native_K": array_digest(case["native_K"]),
+            "surface": [str(case["glb_path"]), case["glb_sha256"], int(case["obj_id"])],
+            "network_session": id(self.network), "device": self.device,
+            "context": self._preparation_scope(),
+        })
+        if self._prepared_frame is None or self._prepared_frame[0] != certificate:
+            # Use exactly the original Torch preparation operations and values.
+            image = torch.from_numpy(np.ascontiguousarray(case["rgb"])).permute(2, 0, 1).float()[None] / 255
+            input_mask = torch.from_numpy((np.asarray(case["mask"]) > 0).copy()).float()[None]
+            self._prepared_frame = (certificate, _FrameTensorBytes.freeze(image),
+                                    _FrameTensorBytes.freeze(input_mask))
+        return (self._prepared_frame[1].restore(torch), self._prepared_frame[2].restore(torch))
 
     def _renderer(self, case):
         key = case["glb_sha256"]
@@ -1012,8 +1102,11 @@ class WorkbenchIntegerRefiner:
             h, w = rgb.shape[:2]
             camera = structs.PinholePlaneCameraModel(width=w, height=h, f=(K[0, 0], K[1, 1]), c=(K[0, 2], K[1, 2]),
                                                      T_world_from_eye=np.eye(4))
-            image = torch.from_numpy(np.ascontiguousarray(rgb)).permute(2, 0, 1).float()[None] / 255
-            input_mask = torch.from_numpy((np.asarray(mask) > 0).copy()).float()[None]
+            if self._preparation_scope is None:
+                image = torch.from_numpy(np.ascontiguousarray(rgb)).permute(2, 0, 1).float()[None] / 255
+                input_mask = torch.from_numpy((np.asarray(mask) > 0).copy()).float()[None]
+            else:
+                image, input_mask = self._frame_inputs(case, torch)
         with torch.inference_mode():
             with stage("crop_template"):
                 data, cameras, crop_from_orig = data_util.compute_gotrack_inputs_from_init_poses(
@@ -1088,6 +1181,7 @@ class WorkbenchIntegerRefiner:
                         errors.append(exc)
         finally:
             self._renderers.clear()
+            self._prepared_frame = self._preparation_scope = None
             self.network = None  # drop the network reference held by this runner
             self.renderer_factory = None
         if errors:
@@ -2065,7 +2159,9 @@ class GoTrackMetricBackend(NeuralBackend):
     def __init__(self, role: str, bundle: MetricBundle, *, head_path: Path | None = None, device: str = "cpu",
                  iterations: int = 5, min_inliers: int = 24, network_loader: Callable | None = None,
                  refiner_factory: Callable | None = None, consistency_deg: float = 10.0,
-                 consistency_translation: float = 0.1):
+                 consistency_translation: float = 0.1, preparation_reuse: bool = False):
+        if type(preparation_reuse) is not bool:
+            raise TypeError("preparation_reuse must be bool")
         if role == "primary_neural":
             if head_path is None:
                 raise NeuralUnavailable("primary backend requires the pinned head.pt path")
@@ -2077,6 +2173,10 @@ class GoTrackMetricBackend(NeuralBackend):
         self.role, self.bundle, self.device = role, bundle, device
         self.network, self._provenance = network, dict(provenance)
         self.refiner = (refiner_factory or (lambda n, d: WorkbenchIntegerRefiner(n, d)))(network, device)
+        if preparation_reuse and not isinstance(self.refiner, WorkbenchIntegerRefiner):
+            raise ValueError("preparation reuse requires WorkbenchIntegerRefiner")
+        self.preparation_reuse = preparation_reuse
+        self._preparation_reset_generation = 0
         self.iterations, self.min_inliers = iterations, min_inliers
         self.consistency = (consistency_deg, consistency_translation)
         self._seed_used = False
@@ -2092,19 +2192,39 @@ class GoTrackMetricBackend(NeuralBackend):
                   "metric_units": "metres"}
         if clip_K is not None:
             extras["effective_K"] = native_K(np.asarray(clip_K, float).ravel(), self.bundle.principal_point_origin).ravel().tolist()
+        if self.preparation_reuse:
+            extras["frame_preparation"] = "experimental_estimate_local_immutable_bytes_v1"
         return extras
 
     def install_provenance(self) -> dict:
         return dict(self._provenance)
 
     def limits(self) -> dict:
-        return {"initialization": self.bundle.seed_label, "seed_single_use": True,
+        limits = {"initialization": self.bundle.seed_label, "seed_single_use": True,
                 "recovery": "unavailable_after_loss (no automatic reacquisition integrated)",
                 "iterations": self.iterations, "min_inliers": self.min_inliers,
                 "public_after_consecutive_consistent": 2}
+        if self.preparation_reuse:
+            limits["frame_preparation"] = "experimental_estimate_local_immutable_bytes_v1"
+        return limits
+
+    def _preparation_context(self, state):
+        """Current declarations plus object lifetimes; never hash model tensors."""
+        return {"frame_id": state.get("_frame_id"), "state_session": id(state),
+                "declared_state_epoch": state.get("_state_epoch"),
+                "local_reset_generation": self._preparation_reset_generation,
+                "role": self.role, "backend_session": id(self), "network_session": id(self.network),
+                "provenance": self._provenance, "device": self.device,
+                "origin": self.bundle.principal_point_origin, "metric_units": "metres",
+                "metric_provenance": self.bundle.metric_provenance,
+                "surface": [str(self.bundle.glb_path), self.bundle.glb_sha256, self.bundle.obj_id],
+                "policy": "experimental_estimate_local_immutable_bytes_v1",
+                "enabled": self.preparation_reuse, "iterations": self.iterations,
+                "min_inliers": self.min_inliers, "consistency": self.consistency}
 
     def reset(self) -> None:
         self._seed_used = False
+        self._preparation_reset_generation += 1
 
     def close(self) -> None:
         close = getattr(self.refiner, "close", None)
@@ -2133,18 +2253,21 @@ class GoTrackMetricBackend(NeuralBackend):
             self._seed_used = True
         pose = np.asarray(init, dtype=np.float64)
         inliers = 0
-        for iteration in range(self.iterations):
-            trace = self.refiner.trace({"rgb": rgb, "mask": observed_mask, "native_K": Kn, "initial_pose_m": pose,
-                                        "glb_path": str(self.bundle.glb_path), "glb_sha256": self.bundle.glb_sha256,
-                                        "obj_id": self.bundle.obj_id, "rng_seed": iteration})
-            inliers = int(np.asarray(trace["ransac_inliers"]).size)
-            if int(np.asarray(trace["solver_state"])) != 1 or inliers < self.min_inliers:
-                state.clear()
-                return {"status": "lost", "pose_m": None,
-                        "reason": f"solver_unavailable at iteration {iteration} ({inliers} inliers)",
-                        "metrics": {"inliers": inliers, "iterations": iteration + 1},
-                        "evidence": {"initialization": label}}
-            pose = np.asarray(trace["solved_native_pose_m"], dtype=np.float64)
+        scope = (self.refiner.preparation_scope(lambda: self._preparation_context(state))
+                 if self.preparation_reuse else nullcontext())
+        with scope:
+            for iteration in range(self.iterations):
+                trace = self.refiner.trace({"rgb": rgb, "mask": observed_mask, "native_K": Kn, "initial_pose_m": pose,
+                                            "glb_path": str(self.bundle.glb_path), "glb_sha256": self.bundle.glb_sha256,
+                                            "obj_id": self.bundle.obj_id, "rng_seed": iteration})
+                inliers = int(np.asarray(trace["ransac_inliers"]).size)
+                if int(np.asarray(trace["solver_state"])) != 1 or inliers < self.min_inliers:
+                    state.clear()
+                    return {"status": "lost", "pose_m": None,
+                            "reason": f"solver_unavailable at iteration {iteration} ({inliers} inliers)",
+                            "metrics": {"inliers": inliers, "iterations": iteration + 1},
+                            "evidence": {"initialization": label}}
+                pose = np.asarray(trace["solved_native_pose_m"], dtype=np.float64)
         previous = state.get("prior_pose")
         consecutive = int(state.get("consecutive", 0))
         state["prior_pose"] = pose
