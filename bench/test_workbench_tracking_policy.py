@@ -1,4 +1,5 @@
 """Model-free policy controls; synthetic rows are not tracking quality evidence."""
+import copy
 import dataclasses
 import hashlib
 import unittest
@@ -279,3 +280,79 @@ class TrackingPolicyTests(unittest.TestCase):
         with self.assertRaises(tp.PolicyRejected):
             p.authorize_reonboarding(authorization_id='user-approved', epoch=1,
                 expected_observations=(self.proof(4, epoch=1),), consumed_seed_sha256='c'*64)
+
+
+    def test_source_order_rejections_are_atomic_and_valid_next_frame_recovers(self):
+        p = tp.TrackingPolicy()
+        p.consume(row(0, timestamp=False), ordinal=0, epoch=0, current_mask_trusted=True)
+        p.consume(row(1, state='lost', timestamp=False), ordinal=1, epoch=0, current_mask_trusted=True)
+        proofs = (self.proof(2), self.proof(3))
+        p.authorize_reonboarding(authorization_id='user-approved', epoch=0,
+            expected_observations=proofs, consumed_seed_sha256='c'*64)
+        first = row(2, timestamp=False)
+        self.assertEqual(p.consume(first, ordinal=2, epoch=0,
+            current_mask_trusted=True, recovery=proofs[0]).state, 'recovering')
+        duplicate_proof = dataclasses.replace(proofs[0], observation_id='different-id')
+        bad_rows = (
+            first,  # Same frame/null time, different observation ID/ordinal.
+            dataclasses.replace(row(3, timestamp=False), source_frame_index=1),
+            dataclasses.replace(first, source_frame_index=3),
+            dataclasses.replace(row(3, timestamp=False), source_frame_index=2),
+            dataclasses.replace(first, image_sha256='c'*64, source_frame_index=3),
+        )
+        for bad in bad_rows:
+            before = copy.deepcopy(p.__dict__)
+            with self.assertRaises(tp.PolicyRejected):
+                p.consume(bad, ordinal=3, epoch=0, current_mask_trusted=True, recovery=duplicate_proof)
+            self.assertEqual(p.__dict__, before)
+        # Rejections did not consume ordinal 3, the active proof or candidate.
+        accepted = p.consume(row(3, timestamp=False), ordinal=3, epoch=0,
+            current_mask_trusted=True, recovery=proofs[1])
+        self.assertTrue(accepted.accepted_measured)
+        self.assertEqual(accepted.state, 'measured')
+
+    def test_duplicate_frame_authorization_refuses_before_any_state_mutation(self):
+        p = tp.TrackingPolicy()
+        proof = self.proof(2)
+        duplicate = dataclasses.replace(proof, observation_id='different-id')
+        before = copy.deepcopy(p.__dict__)
+        with self.assertRaises(tp.PolicyRejected):
+            p.authorize_reonboarding(authorization_id='user-approved', epoch=0,
+                expected_observations=(proof, duplicate), consumed_seed_sha256='c'*64)
+        self.assertEqual(p.__dict__, before)
+        # A valid registration can still bind the correct original seed.
+        p.authorize_reonboarding(authorization_id='user-approved', epoch=0,
+            expected_observations=(proof, self.proof(3)), consumed_seed_sha256='e'*64)
+        self.assertEqual(p._consumed_seed_sha256, 'e'*64)
+
+    def test_epoch_reset_clears_source_order_without_forgetting_consumed_seeds(self):
+        p = self.lost_policy()
+        p.authorize_reonboarding(authorization_id='user-approved', epoch=0,
+            expected_observations=(self.proof(2), self.proof(3)), consumed_seed_sha256='c'*64)
+        p.consume(row(2), ordinal=2, epoch=0, current_mask_trusted=True, recovery=self.proof(2))
+        p.reset(1)
+        self.assertEqual(p._frame_ids, set())
+        self.assertIsNone(p._source_index)
+        self.assertTrue({'c'*64, 'd'*64}.issubset(p._consumed_seed_hashes))
+        fresh = p.consume(row(0), ordinal=0, epoch=1, current_mask_trusted=True)
+        self.assertTrue(fresh.accepted_measured)
+        self.assertEqual(p._frame_ids, {'f0'})
+
+    def test_decoded_checkpoint_identity_requires_exact_keys_and_strict_types(self):
+        state = b'strict-identity-state'
+        expected = tp.ReplayIdentity(*(['a'*64]*5), hashlib.sha256(state).hexdigest(), 1)
+        body = dict(schema='tracking_checkpoint_v1', identity=dataclasses.asdict(expected),
+                    prefix_frame_ids=['f0','f1'], state_hex=state.hex())
+        def verify(identity):
+            tp.verify_checkpoint(wc.canonical_json(dict(body, identity=identity)),
+                expected=expected, expected_prefix=('f0','f1'), expected_state=state)
+        verify(dict(body['identity']))  # Genuine integer epoch remains valid.
+        variants = [dict(body['identity'], epoch=True), dict(body['identity'], epoch=1.0),
+                    dict(body['identity'], unexpected='x'),
+                    {k:v for k,v in body['identity'].items() if k != 'epoch'},
+                    dict(body['identity'], source_sha256=1),
+                    dict(body['identity'], mask_sha256='A'*64),
+                    dict(body['identity'], head_sha256='short')]
+        for identity in variants:
+            with self.subTest(identity=identity), self.assertRaises(tp.PolicyRejected):
+                verify(identity)

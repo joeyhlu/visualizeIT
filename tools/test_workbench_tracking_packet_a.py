@@ -1,4 +1,5 @@
 """Independent integration controls for Packet A; no model or real-data claims."""
+import copy
 import dataclasses
 import hashlib
 import tempfile
@@ -126,6 +127,63 @@ class IndependentPacketChecks(unittest.TestCase):
             display.authorize_reonboarding(authorization_id='independent-event', epoch=0,
                 expected_observations=(self.proof(5, 'd'), self.proof(6, 'd')),
                 consumed_seed_sha256='c'*64)
+
+    def test_duplicate_authorized_source_frame_refuses_without_mutation(self):
+        display = self.recovery_policy()
+        before = copy.deepcopy(vars(display))
+        duplicate = dataclasses.replace(self.proof(2), observation_id='different-id')
+        with self.assertRaises(policy.PolicyRejected):
+            display.authorize_reonboarding(authorization_id='independent-event', epoch=0,
+                expected_observations=(self.proof(2), duplicate), consumed_seed_sha256='c'*64)
+        self.assertEqual(vars(display), before)
+
+    def test_null_clock_duplicate_backward_and_mutated_sources_are_atomic(self):
+        # Ordinal advancement must never turn one RGB observation into two
+        # recovery measurements. All variants are valid FrameResult records.
+        for variant in ('same', 'backward', 'same-id-new-index', 'new-id-same-index'):
+            with self.subTest(variant=variant):
+                display = policy.TrackingPolicy()
+                display.consume(row(timestamp=False), ordinal=0, epoch=0, current_mask_trusted=True)
+                display.consume(row(1, state='lost', timestamp=False), ordinal=1,
+                                epoch=0, current_mask_trusted=True)
+                display.authorize_reonboarding(authorization_id='independent-event', epoch=0,
+                    expected_observations=(self.proof(2), self.proof(3)), consumed_seed_sha256='c'*64)
+                display.consume(row(2, timestamp=False), ordinal=2, epoch=0,
+                                current_mask_trusted=True, recovery=self.proof(2))
+                source = row(2, timestamp=False)
+                if variant == 'backward':
+                    source = row(1, timestamp=False)
+                elif variant == 'same-id-new-index':
+                    source = dataclasses.replace(source, source_frame_index=3, image_sha256='f'*64)
+                elif variant == 'new-id-same-index':
+                    source = dataclasses.replace(source, frame_id='different-frame', mask_frame_id='different-frame')
+                before = copy.deepcopy(vars(display))
+                with self.assertRaises(policy.PolicyRejected):
+                    display.consume(source, ordinal=3, epoch=0, current_mask_trusted=True,
+                                    recovery=self.proof(3))
+                self.assertEqual(vars(display), before)
+                # Rejecting the duplicate must not consume the ordinal, seed or
+                # authorization needed by the genuine next source frame.
+                fresh = display.consume(row(3, timestamp=False), ordinal=3, epoch=0,
+                                        current_mask_trusted=True, recovery=self.proof(3))
+                self.assertTrue(fresh.accepted_measured)
+
+    def test_decoded_checkpoint_identity_requires_exact_integer_epoch_and_keys(self):
+        state = b'independent-valid-checkpoint'
+        expected = policy.ReplayIdentity(*(['a'*64]*5), hashlib.sha256(state).hexdigest(), 1)
+        body = dict(schema='tracking_checkpoint_v1', identity=dataclasses.asdict(expected),
+                    prefix_frame_ids=['f0', 'f1'], state_hex=state.hex())
+        def verify(value):
+            policy.verify_checkpoint(wc.canonical_json(value), expected=expected,
+                                     expected_prefix=('f0', 'f1'), expected_state=state)
+        verify(body)
+        for epoch in (True, 1.0, '1', None):
+            with self.subTest(epoch=repr(epoch)), self.assertRaises(policy.PolicyRejected):
+                verify(dict(body, identity=dict(body['identity'], epoch=epoch)))
+        for identity in (dict(body['identity'], unexpected='x'),
+                         {k: v for k, v in body['identity'].items() if k != 'epoch'}):
+            with self.assertRaises(policy.PolicyRejected):
+                verify(dict(body, identity=identity))
 
     def test_actual_export_keeps_failed_rgb_and_separate_flat_pose(self):
         cache = Path(__file__).resolve().parents[1] / '.cache'

@@ -122,7 +122,12 @@ def verify_checkpoint(payload: bytes, *, expected: ReplayIdentity, expected_pref
         body = wc.loads_strict(payload)
         if set(body) != {'schema', 'identity', 'prefix_frame_ids', 'state_hex'} or body['schema'] != 'tracking_checkpoint_v1':
             raise PolicyRejected('checkpoint schema differs')
-        if body['identity'] != dataclasses.asdict(expected) or tuple(body['prefix_frame_ids']) != tuple(expected_prefix):
+        decoded = body['identity']
+        if not isinstance(decoded, dict) or set(decoded) != {field.name for field in dataclasses.fields(ReplayIdentity)}:
+            raise PolicyRejected('checkpoint identity keys differ')
+        authenticated = ReplayIdentity(**decoded)
+        authenticated.validate()
+        if dataclasses.asdict(authenticated) != dataclasses.asdict(expected) or tuple(body['prefix_frame_ids']) != tuple(expected_prefix):
             raise PolicyRejected('checkpoint arm/epoch/prefix identity differs')
         if bytes.fromhex(body['state_hex']) != expected_state:
             raise PolicyRejected('checkpoint state bytes differ')
@@ -209,6 +214,8 @@ class TrackingPolicy:
         self._prior_ordinal = self._prior_timestamp = None
         self._hard_loss = False
         self._row_identity = None
+        self._frame_ids = set()
+        self._source_index = None
         self._candidate = None
         self._candidate_ordinal = None
         self._authorization = None
@@ -232,10 +239,11 @@ class TrackingPolicy:
         checks their identity bindings only. FrameBoundary has no backend re-arm
         integration and therefore does not expose this as backend recovery.
         """
-        self.bind_initial_seed(consumed_seed_sha256)
-        if epoch != self._epoch or not authorization_id or not expected_observations:
+        _digest(consumed_seed_sha256)
+        if type(epoch) is not int or epoch != self._epoch or not authorization_id or not expected_observations:
             raise PolicyRejected('explicit current-epoch re-onboarding authorization required')
         checked = {}
+        frame_ids = set()
         for observation in expected_observations:
             if (not isinstance(observation, RecoveryObservation) or observation.authorization_id != authorization_id
                     or observation.epoch != epoch or observation.fresh_seed is not True
@@ -244,11 +252,17 @@ class TrackingPolicy:
             _digest(observation.seed_sha256)
             _digest(observation.image_sha256)
             _digest(observation.mask_sha256)
-            if observation.seed_sha256 in self._consumed_seed_hashes:
+            if observation.seed_sha256 == consumed_seed_sha256 or observation.seed_sha256 in self._consumed_seed_hashes:
                 raise PolicyRejected('consumed historical seed cannot authorize recovery')
             if not observation.observation_id or observation.observation_id in checked:
                 raise PolicyRejected('recovery observations must be distinct')
+            if observation.frame_id in frame_ids:
+                raise PolicyRejected('recovery observations require distinct source frames')
+            frame_ids.add(observation.frame_id)
             checked[observation.observation_id] = observation
+        # Validate the complete event before binding the original seed or making
+        # any other mutation, so a refused duplicate-frame event is atomic.
+        self.bind_initial_seed(consumed_seed_sha256)
         self._authorized_observations = checked
         self._active_authorization = authorization_id
         self._authorization = None
@@ -279,7 +293,6 @@ class TrackingPolicy:
         identity = wc.canonical_sha256([row.run_id, row.clip_id, row.backend_role, row.backend_identity])
         if self._row_identity is not None and self._row_identity != identity:
             raise PolicyRejected('source/run/backend identity changed within epoch')
-        self._row_identity = identity
         if row.pose is not None and row.pose_units != 'metric':
             raise PolicyRejected('relative or unknown-scale pose cannot enter metric display policy')
         ts = row.timestamp_s
@@ -287,6 +300,15 @@ class TrackingPolicy:
             raise PolicyRejected('clock kind changed within epoch')
         if ts is not None and (not math.isfinite(ts) or (self._timestamp is not None and ts <= self._timestamp)):
             raise PolicyRejected('genuine timestamps must increase')
+        if row.frame_id in self._frame_ids:
+            raise PolicyRejected('frame_id must be unique within the epoch')
+        if self._source_index is not None and row.source_frame_index <= self._source_index:
+            raise PolicyRejected('source_frame_index must strictly increase within the epoch')
+        # All rejection checks precede state mutation. Caller ordinals alone
+        # cannot turn repeated source evidence into fresh recovery observations.
+        self._row_identity = identity
+        self._frame_ids.add(row.frame_id)
+        self._source_index = row.source_frame_index
         self._clock_null = ts is None
         self._ordinal, self._timestamp = ordinal, ts
         trusted = (current_mask_trusted and row.mask_state == 'observed' and row.mask_frame_id == row.frame_id
