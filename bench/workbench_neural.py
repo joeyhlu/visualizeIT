@@ -2459,8 +2459,9 @@ class NeuralArtwork:
 
     def __init__(self, bundle: MetricBundle, selection: wc.Selection, artwork_kind: str, *, clip_K,
                  width: int, height: int, selection_mask: np.ndarray | None, size_fraction: float = 0.25,
-                 max_faces: int = 200_000):
+                 max_faces: int = 200_000, max_chart_stretch: float | None = None):
         from . import workbench_geometry as wg
+        self._max_chart_stretch = wg.check_chart_stretch_limit(max_chart_stretch)
         if bundle.seed_pose_m is None:
             raise NeuralUnavailable("artwork anchor needs the labelled seed pose")
         if selection.frame_id != bundle.seed_frame_id:
@@ -2480,7 +2481,7 @@ class NeuralArtwork:
         art_sha = wg.array_sha256(self.art)
         self.marker = wg.make_marker(v, f, hit, bundle.seed_pose_m, size, art_sha)
         self.support = np.full(len(f), 3, dtype=np.int32)
-        self.patch = wg.marker_patch(v, f, self.support, self.marker)
+        self.patch = wg.marker_patch(v, f, self.support, self.marker, max_chart_stretch=self.max_chart_stretch)
         self.record = {"schema": "workbench_neural_artwork_v1", "units": "metres", "glb_sha256": bundle.glb_sha256,
                        "marker": self.marker, "anchor_pixel": [u, vv], "anchor_frame_id": selection.frame_id,
                        "seed_label": bundle.seed_label, "artwork": {"kind": artwork_kind, "edge_px": 256,
@@ -2489,9 +2490,22 @@ class NeuralArtwork:
                        "principal_point_origin": bundle.principal_point_origin, "effective_K": self.K.ravel().tolist(),
                        "patch_faces": int(len(self.patch["faces"])), "mesh_faces": int(len(f)),
                        "anchor_mask_checked": selection_mask is not None}
+        if self.max_chart_stretch is not None:
+            self.record["chart_stretch_policy"] = {"kind": "local_inverse_orthogonal_projection_v1",
+                                                  "max_chart_stretch": self.max_chart_stretch}
         self.sha256 = wc.canonical_sha256(self.record)
+
+    @property
+    def max_chart_stretch(self) -> float | None:
+        return self._max_chart_stretch
 
     def render(self, pose_m: np.ndarray, observed_mask: np.ndarray, _clip_K=None) -> dict:
         from . import workbench_geometry as wg
+        limit = wg.check_chart_stretch_limit(self.max_chart_stretch)
+        bound_limit = self.record.get("chart_stretch_policy", {}).get("max_chart_stretch")
+        if (limit != bound_limit or ((limit is not None or bound_limit is not None)
+                                    and wc.canonical_sha256(self.record) != self.sha256)):
+            raise wg.GeometryError("artwork chart stretch policy differs from its bound record")
         return wg.render_marker(self.vertices, self.faces, self.support, self.marker, self.art, self.K,
-                                np.asarray(pose_m, float), self.width, self.height, observed_mask, patch=self.patch)
+                                np.asarray(pose_m, float), self.width, self.height, observed_mask, patch=self.patch,
+                                max_chart_stretch=limit)

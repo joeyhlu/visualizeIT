@@ -18,6 +18,7 @@ from collections import deque
 from dataclasses import dataclass, field
 import hashlib
 import math
+from numbers import Real
 from typing import Any, Mapping
 
 import numpy as np
@@ -511,19 +512,83 @@ def _chart_overlap_cells(chart_uv: np.ndarray, faces_local: np.ndarray, half: fl
     return counts
 
 
+def check_chart_stretch_limit(value: float | None) -> float | None:
+    """Validate an explicit experimental cap; no default cap is calibrated."""
+    if value is None:
+        return None
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+        raise GeometryError("max_chart_stretch must be a finite number >= 1 or None")
+    value = float(value)
+    if not math.isfinite(value) or value < 1:
+        raise GeometryError("max_chart_stretch must be a finite number >= 1 or None")
+    return value
+
+
+def face_chart_stretches(vertices, faces, marker: Mapping[str, Any]) -> np.ndarray:
+    """Per-triangle inverse orthogonal chart stretch, 1/abs(n_face dot n_chart).
+
+    This is a local differential bound, not a global geodesic distortion claim.
+    Degenerate or numerically grazing faces return inf and cannot pass a cap.
+    Callers publishing JSON must represent these unavailable values as null.
+    """
+    basis = np.asarray([marker[k] for k in ("tangent", "bitangent", "normal")], dtype=np.float64)
+    if (basis.shape != (3, 3) or not np.isfinite(basis).all()
+            or not np.allclose(basis @ basis.T, np.eye(3), atol=1e-7, rtol=0)
+            or not np.isclose(np.linalg.det(basis), 1.0, atol=1e-7, rtol=0)):
+        raise GeometryError("chart marker frame must be orthonormal and right-handed")
+    v = np.asarray(vertices, dtype=np.float64)
+    f = np.asarray(faces)
+    if (v.ndim != 2 or v.shape[1] != 3 or not np.isfinite(v).all()
+            or f.ndim != 2 or f.shape[1] != 3 or f.dtype.kind not in "iu"
+            or np.any(f < 0) or np.any(f >= len(v))):
+        raise GeometryError("chart stretch requires finite vertices and valid triangle indices")
+    tri = v[f]
+    e1, e2 = tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]
+    # Scale each triangle before taking its cross product: units do not affect
+    # degeneracy or the measured angle, including on very small meshes.
+    scale = np.maximum(np.max(np.abs(e1), axis=1), np.max(np.abs(e2), axis=1))
+    safe_scale = np.where(scale > 0, scale, 1.0)
+    cross = np.cross(e1 / safe_scale[:, None], e2 / safe_scale[:, None])
+    length = np.linalg.norm(cross, axis=1)
+    valid = (scale > 0) & (length > 1e-12)
+    normals = cross / np.maximum(length[:, None], 1e-300)
+    cosine = np.clip(np.abs(normals @ basis[2]), 0.0, 1.0)
+    cosine[1.0 - cosine <= 8 * np.finfo(float).eps] = 1.0
+    valid &= cosine > 1e-12
+    stretch = np.full(len(f), np.inf)
+    stretch[valid] = 1.0 / cosine[valid]
+    return stretch
+
+
 def marker_patch(vertices, faces, face_support: np.ndarray, marker: Mapping[str, Any], *,
-                 min_support: int = 3, max_normal_angle_deg: float = 75.0, overlap_grid: int = 128) -> dict:
+                 min_support: int = 3, max_normal_angle_deg: float = 75.0, overlap_grid: int = 128,
+                 max_chart_stretch: float | None = None) -> dict:
     """Connected supported faces around the anchor with valid (unfolded) chart coordinates."""
     v = np.asarray(vertices, dtype=np.float64)
     f = np.asarray(faces, dtype=np.int64)
     support = np.asarray(face_support)
     fid0 = int(marker["face_id"])
     t, b, n = (np.asarray(marker[k], dtype=np.float64) for k in ("tangent", "bitangent", "normal"))
+    limit = check_chart_stretch_limit(max_chart_stretch)
+    stretches = face_chart_stretches(vertices, faces, marker) if limit is not None else None
+    rejected = set()
+    def finish(result):
+        if limit is not None:
+            accepted = stretches[result["faces"]]
+            result.update(chart_stretch_limit=limit,
+                          max_accepted_chart_stretch=float(accepted.max()) if len(accepted) else None,
+                          chart_stretch_rejected_faces=len(rejected),
+                          chart_stretch_unavailable_faces=sum(not np.isfinite(stretches[i]) for i in rejected))
+        return result
     p = (np.asarray(marker["barycentric"])[:, None] * v[f[fid0]]).sum(axis=0)
     half = float(marker["size_object_units"]) / 2
     if support[fid0] < min_support:
-        return {"faces": np.zeros(0, dtype=np.int64), "reason": "anchor_face_unsupported",
-                "anchor_point": p, "half": half}
+        return finish({"faces": np.zeros(0, dtype=np.int64), "reason": "anchor_face_unsupported",
+                       "anchor_point": p, "half": half})
+    if limit is not None and stretches[fid0] > limit:
+        rejected.add(fid0)
+        return finish({"faces": np.zeros(0, dtype=np.int64), "reason": "anchor_chart_stretch_exceeded",
+                       "anchor_point": p, "half": half})
     normals = face_normals(v, f)
     # Orient patch normals with the marker normal sign of the anchor face.
     sign = 1.0 if np.dot(normals[fid0], n) >= 0 else -1.0
@@ -536,6 +601,9 @@ def marker_patch(vertices, faces, face_support: np.ndarray, marker: Mapping[str,
         i = queue.popleft()
         for j in adjacency[i]:
             if j in chosen or support[j] < min_support:
+                continue
+            if limit is not None and stretches[j] > limit:
+                rejected.add(j)
                 continue
             if sign * np.dot(normals[j], n) < cos_lim:
                 continue
@@ -559,15 +627,15 @@ def marker_patch(vertices, faces, face_support: np.ndarray, marker: Mapping[str,
     folded = patch[~keep]
     patch = patch[keep]
     counts = _chart_overlap_cells(chart_all, f[patch], half, overlap_grid) if len(patch) else None
-    return {"faces": patch, "folded_faces": folded, "anchor_point": p, "half": half,
+    return finish({"faces": patch, "folded_faces": folded, "anchor_point": p, "half": half,
             "chart_t": t, "chart_b": b, "overlap_counts": counts, "overlap_grid": overlap_grid,
-            "reason": None}
+            "reason": None})
 
 
 def render_marker(vertices, faces, face_support, marker: Mapping[str, Any], artwork: np.ndarray,
                   K, pose, width: int, height: int, observed_mask: np.ndarray, *,
                   raster: RasterResult | None = None, patch: dict | None = None,
-                  min_support: int = 3) -> dict:
+                  min_support: int = 3, max_chart_stretch: float | None = None) -> dict:
     """Render the anchored artwork over the actual curved surface.
 
     Pixels are kept only when the depth-tested visible face belongs to the
@@ -580,8 +648,12 @@ def render_marker(vertices, faces, face_support, marker: Mapping[str, Any], artw
     if mask.shape != (height, width):
         raise GeometryError("observed mask dimensions differ from the frame")
     art = check_artwork(artwork)
-    if patch is None:
-        patch = marker_patch(vertices, faces, face_support, marker, min_support=min_support)
+    limit = check_chart_stretch_limit(max_chart_stretch)
+    # A supplied legacy/stale patch cannot waive an explicit guard or current
+    # support checks. Recompute from immutable geometry instead of trusting it.
+    if patch is None or limit is not None:
+        patch = marker_patch(vertices, faces, face_support, marker, min_support=min_support,
+                             max_chart_stretch=limit)
     if raster is None and len(patch["faces"]):
         roi = None
         pv = np.unique(np.asarray(faces)[patch["faces"]])
@@ -595,6 +667,9 @@ def render_marker(vertices, faces, face_support, marker: Mapping[str, Any], artw
     stats = {"rendered_pixels": 0, "mask_rejected_pixels": 0, "overlap_rejected_pixels": 0,
              "backfacing_rejected_pixels": 0, "patch_faces": int(len(patch["faces"])),
              "folded_faces": int(len(patch.get("folded_faces", ()))), "reason": patch.get("reason")}
+    if limit is not None:
+        stats.update({k: patch[k] for k in ("chart_stretch_limit", "max_accepted_chart_stretch",
+                      "chart_stretch_rejected_faces", "chart_stretch_unavailable_faces")})
     if not len(patch["faces"]):
         return {"rgba": rgba, "stats": stats}
     in_patch = np.isin(raster.face_id, patch["faces"])
