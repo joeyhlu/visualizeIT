@@ -558,6 +558,9 @@ def prepare_workbench_contract(cases: Sequence[Mapping[str, Any]], *, root: Path
     must come from inference/onboarding; evaluator-derived values are rejected.
     Relative auto-reconstructed (object_unit) geometry is excluded.
     """
+    cases = [dict(case) for case in cases]
+    for case in cases:
+        wc._int(case["obj_id"], "obj_id", minimum=0, maximum=2**31 - 1)
     verified = verify_primary_record(root)
     _authenticated_bytes(head_path, PRIMARY["export_bytes"], PRIMARY["export_sha256"], "primary export")
     _authenticated_bytes(reference_path, PRIMARY["reference_checkpoint_bytes"],
@@ -601,7 +604,7 @@ def prepare_workbench_contract(cases: Sequence[Mapping[str, Any]], *, root: Path
                      "segmentation": {"producer": str(seg["producer"]), "manifest_sha256": seg["manifest_sha256"]},
                      "native_K": K.tolist(), "principal_point_origin": case["principal_point_origin"],
                      "initial_pose_m": [list(r) for r in pose], "initialization_source": init_src,
-                     "glb": glb, "obj_id": int(case["obj_id"]), "metric_provenance": case["metric_provenance"]})
+                     "glb": glb, "obj_id": case["obj_id"], "metric_provenance": case["metric_provenance"]})
     body = {"schema": CONTRACT_SCHEMA, "profile": PROFILE, "primary": primary_identity(),
             "record_sha256": verified["record_sha256"], "reference_checkpoint_sha256": PRIMARY["reference_checkpoint_sha256"],
             "base_checkpoint_sha256": PRIMARY["base_checkpoint_sha256"], "cases": rows,
@@ -2191,6 +2194,7 @@ class MetricBundle:
                       "seed_pose_m", "seed_label", "seed_frame_id", "metric_provenance"), (), "metric bundle")
         if d["schema"] != "workbench_metric_bundle_v1":
             raise AdmissionError("metric bundle schema differs")
+        obj_id = wc._int(d["obj_id"], "obj_id", minimum=0, maximum=2**31 - 1)
         glb = Path(d["glb_path"])
         glb = glb if glb.is_absolute() else root / glb
         if glb_inventory(glb)["sha256"] != d["glb_sha256"]:
@@ -2204,7 +2208,7 @@ class MetricBundle:
             if not str(d["seed_label"] or "").startswith(SEED_PREFIXES):
                 raise AdmissionError("seed must be labelled controlled_init:/onboarding:, never evaluator data")
             seed = np.array(wc._pose(d["seed_pose_m"], "seed_pose_m"), dtype=np.float64)
-        return cls(wc._str(d["family"], "family", max_len=64), glb, d["glb_sha256"], int(d["obj_id"]),
+        return cls(wc._str(d["family"], "family", max_len=64), glb, d["glb_sha256"], obj_id,
                    d["principal_point_origin"], seed, d["seed_label"], d["seed_frame_id"], d["metric_provenance"])
 
 
