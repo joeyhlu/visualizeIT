@@ -356,3 +356,49 @@ class TrackingPolicyTests(unittest.TestCase):
         for identity in variants:
             with self.subTest(identity=identity), self.assertRaises(tp.PolicyRejected):
                 verify(identity)
+
+
+    def test_nested_recovery_epoch_authorization_rejects_types_atomically(self):
+        for bad_epoch in (True, False, 1.0, -1.0, -1):
+            for from_json in (False, True):
+                with self.subTest(epoch=bad_epoch, from_json=from_json):
+                    p = tp.TrackingPolicy(); p.reset(1)
+                    first = self.proof(2, epoch=1)
+                    bad = self.proof(3, epoch=bad_epoch)
+                    if from_json:
+                        bad = tp.RecoveryObservation(**wc.loads_strict(wc.canonical_json(dataclasses.asdict(bad))))
+                    before = copy.deepcopy(p.__dict__)
+                    with self.assertRaises(tp.PolicyRejected):
+                        p.authorize_reonboarding(authorization_id='user-approved', epoch=1,
+                            expected_observations=(first, bad), consumed_seed_sha256='c'*64)
+                    self.assertEqual(p.__dict__, before)
+                    self.assertIsNone(p._consumed_seed_sha256)
+                    # The failed event did not bind a seed or poison registration.
+                    p.authorize_reonboarding(authorization_id='user-approved', epoch=1,
+                        expected_observations=(first, self.proof(3, epoch=1)), consumed_seed_sha256='e'*64)
+                    self.assertEqual(p._consumed_seed_sha256, 'e'*64)
+
+    def test_nested_recovery_epoch_consume_rejects_atomically_and_fresh_pair_still_recovers(self):
+        p = tp.TrackingPolicy(); p.reset(1)
+        p.consume(row(0, timestamp=False), ordinal=0, epoch=1, current_mask_trusted=True)
+        p.consume(row(1, state='lost', timestamp=False), ordinal=1, epoch=1, current_mask_trusted=True)
+        proofs = (self.proof(2, epoch=1), self.proof(3, epoch=1))
+        p.authorize_reonboarding(authorization_id='user-approved', epoch=1,
+            expected_observations=proofs, consumed_seed_sha256='c'*64)
+        for n, proof in zip((2, 3), proofs):
+            for bad_epoch in (True, False, 1.0, -1.0, -1):
+                with self.subTest(frame=n, epoch=bad_epoch):
+                    bad = dataclasses.replace(proof, epoch=bad_epoch)
+                    # Dataclass equality alone would accept True/1.0 as int 1.
+                    if bad_epoch is True or type(bad_epoch) is float and bad_epoch == 1.0:
+                        self.assertEqual(bad, proof)
+                    before = copy.deepcopy(p.__dict__)
+                    self.assertFalse(p._recovery_valid(bad, row(n, timestamp=False), 1, True))
+                    with self.assertRaises(tp.PolicyRejected):
+                        p.consume(row(n, timestamp=False), ordinal=n, epoch=1,
+                            current_mask_trusted=True, recovery=bad)
+                    self.assertEqual(p.__dict__, before)
+            result = p.consume(row(n, timestamp=False), ordinal=n, epoch=1,
+                current_mask_trusted=True, recovery=proof)
+            self.assertEqual(result.state, 'recovering' if n == 2 else 'measured')
+            self.assertEqual(result.accepted_measured, n == 3)

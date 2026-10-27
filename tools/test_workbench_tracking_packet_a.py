@@ -185,6 +185,47 @@ class IndependentPacketChecks(unittest.TestCase):
             with self.assertRaises(policy.PolicyRejected):
                 verify(dict(body, identity=identity))
 
+    def epoch_one_recovery(self):
+        display = policy.TrackingPolicy()
+        display.reset(1)
+        display.consume(row(timestamp=False), ordinal=0, epoch=1, current_mask_trusted=True)
+        display.consume(row(1, state='lost', timestamp=False), ordinal=1,
+                        epoch=1, current_mask_trusted=True)
+        proofs = tuple(dataclasses.replace(self.proof(n), epoch=1) for n in (2, 3))
+        return display, proofs
+
+    def test_nested_epoch_authorization_strict_types_and_atomicity(self):
+        for bad_epoch in (True, 1.0, -1, '1', None):
+            with self.subTest(epoch=repr(bad_epoch)):
+                display, proofs = self.epoch_one_recovery()
+                invalid = tuple(dataclasses.replace(proof, epoch=bad_epoch) for proof in proofs)
+                before = copy.deepcopy(vars(display))
+                with self.assertRaises(policy.PolicyRejected):
+                    display.authorize_reonboarding(authorization_id='independent-event', epoch=1,
+                        expected_observations=invalid, consumed_seed_sha256='c'*64)
+                self.assertEqual(vars(display), before)
+
+    def test_nested_epoch_consume_rejects_equal_boolean_float_before_mutation(self):
+        display, proofs = self.epoch_one_recovery()
+        display.authorize_reonboarding(authorization_id='independent-event', epoch=1,
+            expected_observations=proofs, consumed_seed_sha256='c'*64)
+        for bad_epoch in (True, 1.0, -1, '1', None):
+            with self.subTest(epoch=repr(bad_epoch)):
+                before = copy.deepcopy(vars(display))
+                with self.assertRaises(policy.PolicyRejected):
+                    display.consume(row(2, timestamp=False), ordinal=2, epoch=1,
+                        current_mask_trusted=True,
+                        recovery=dataclasses.replace(proofs[0], epoch=bad_epoch))
+                self.assertEqual(vars(display), before)
+        # Python equality would equate true/1.0 with 1 above. Only the genuine
+        # integer-typed observations may complete this two-frame recovery.
+        first = display.consume(row(2, timestamp=False), ordinal=2, epoch=1,
+                                current_mask_trusted=True, recovery=proofs[0])
+        second = display.consume(row(3, timestamp=False), ordinal=3, epoch=1,
+                                 current_mask_trusted=True, recovery=proofs[1])
+        self.assertFalse(first.accepted_measured)
+        self.assertTrue(second.accepted_measured)
+
     def test_actual_export_keeps_failed_rgb_and_separate_flat_pose(self):
         cache = Path(__file__).resolve().parents[1] / '.cache'
         cache.mkdir(exist_ok=True)

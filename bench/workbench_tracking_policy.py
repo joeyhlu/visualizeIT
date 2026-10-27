@@ -246,6 +246,7 @@ class TrackingPolicy:
         frame_ids = set()
         for observation in expected_observations:
             if (not isinstance(observation, RecoveryObservation) or observation.authorization_id != authorization_id
+                    or type(observation.epoch) is not int or observation.epoch < 0
                     or observation.epoch != epoch or observation.fresh_seed is not True
                     or not observation.seed_label.startswith('onboarding:')):
                 raise PolicyRejected('fresh user onboarding observations required')
@@ -270,7 +271,8 @@ class TrackingPolicy:
         self._candidate_ordinal = None
 
     def _recovery_valid(self, observation, row, epoch, trusted):
-        if not isinstance(observation, RecoveryObservation) or not trusted:
+        if (not isinstance(observation, RecoveryObservation) or not trusted
+                or type(observation.epoch) is not int or observation.epoch < 0):
             return False
         r = observation
         return (self._active_authorization == r.authorization_id
@@ -289,6 +291,9 @@ class TrackingPolicy:
             raise PolicyRejected('causal ordinals must be consecutive')
         if type(current_mask_trusted) is not bool or type(ambiguous_identity) is not bool:
             raise PolicyRejected('trust and ambiguity must be explicit booleans')
+        if (isinstance(recovery, RecoveryObservation)
+                and (type(recovery.epoch) is not int or recovery.epoch < 0)):
+            raise PolicyRejected('recovery observation epoch must be a nonnegative integer')
         row = wc.FrameResult.from_dict(row.to_dict())
         identity = wc.canonical_sha256([row.run_id, row.clip_id, row.backend_role, row.backend_identity])
         if self._row_identity is not None and self._row_identity != identity:
