@@ -210,9 +210,61 @@ def _project(path, revision):
     return doc, rgba, hashlib.sha256(raw).hexdigest(), hashlib.sha256(png).hexdigest()
 
 
+def prepare_mesh_artwork(rgba, marker, placement=None):
+    """Center-letterbox to a square without resizing; odd padding goes bottom/right.
+
+    The surface sampler uses floor/clamp texel cells, with PNG top at +bitangent.
+    Return independent arrays/records; the persistent anchor is never edited.
+    """
+    p = placement_values(placement)
+    if p["offset_t_m"] != 0 or p["offset_b_m"] != 0:
+        refuse("mesh offsets require a separately admitted persistent anchor")
+    if (not isinstance(rgba, np.ndarray) or rgba.dtype != np.uint8 or rgba.ndim != 3
+            or rgba.shape[2] != 4 or min(rgba.shape[:2]) < 2 or max(rgba.shape[:2]) > 1024):
+        refuse("mesh artwork must be uint8 RGBA with edges 2..1024")
+    h, w = rgba.shape[:2]
+    edge = max(8, h, w)
+    padded = np.zeros((edge, edge, 4), np.uint8)
+    top, left = (edge-h)//2, (edge-w)//2
+    padded[top:top+h, left:left+w] = rgba
+    derived = ar._plain(marker)
+    t, b = (np.asarray(marker[k], np.float64) for k in ("tangent", "bitangent"))
+    angle = math.radians(p["rotation_deg"])
+    derived["tangent"] = (math.cos(angle)*t + math.sin(angle)*b).tolist()
+    derived["bitangent"] = (-math.sin(angle)*t + math.cos(angle)*b).tolist()
+    # Minimum sampler canvas edge must not shrink a tiny selected PNG physically.
+    derived["size_object_units"] = float(marker["size_object_units"]) * p["scale"] * edge/max(h, w)
+    derived["artwork_sha256"] = wg.array_sha256(padded)
+    return padded, derived
+
+
+def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker,
+                 placement=None, *, max_chart_stretch=None):
+    """Actual registered mesh visibility and straight-alpha, half-up RGB composition."""
+    p = placement_values(placement)
+    limit = wg.check_chart_stretch_limit(max_chart_stretch)
+    if not isinstance(rgb, np.ndarray) or rgb.dtype != np.uint8 or rgb.ndim != 3 or rgb.shape[2] != 3:
+        refuse("source must be uint8 RGB")
+    if mask is None or np.asarray(mask).shape != rgb.shape[:2]:
+        refuse("observed mask dimensions differ")
+    texture, derived = prepare_mesh_artwork(rgba, marker, p)
+    h, w = rgb.shape[:2]
+    rendered = wg.render_marker_rgba(vertices, faces, face_support, derived, texture, K, pose,
+                                    w, h, mask, max_chart_stretch=limit)
+    overlay, stats = rendered["rgba"], dict(rendered["stats"])
+    alpha = overlay[:, :, 3].astype(np.float64) * (p["opacity"] / 255.0)
+    alpha *= np.asarray(mask, bool)
+    stats["composited_pixels"] = int(np.count_nonzero(alpha > 0))
+    if not stats["composited_pixels"]:
+        return rgb.copy(), "mesh_" + (stats.get("reason") or "empty_or_outside_observed_mask"), stats
+    result = np.floor(overlay[:, :, :3].astype(np.float64)*alpha[:, :, None]
+                      + rgb.astype(np.float64)*(1-alpha[:, :, None]) + .5).astype(np.uint8)
+    return result, "rendered_mesh_artwork", stats
+
+
 def export_saved_window(workspace, *, run_id, role, project_path, expected_revision, bundle_path,
                         bundle_sha256, admission_dir, output_dir, playback_fps, placement=None, repo_root=ROOT,
-                        experimental_tracking=False):
+                        experimental_tracking=False, surface_mode="planar", max_chart_stretch=None):
     """Publish a new derived directory only after complete video decode and input reauthentication."""
     from . import workbench_cli as cli, workbench_frame_boundary as fb, workbench_neural as wn
     from .vision import cv2
@@ -221,6 +273,16 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
     if type(playback_fps) not in (int, float) or not math.isfinite(playback_fps) or not 0.1 <= playback_fps <= 120:
         refuse("explicit CFR playback FPS must be between 0.1 and 120")
     placement = placement_values(placement)
+    if surface_mode not in ("planar", "mesh"):
+        refuse("surface_mode must be planar or mesh")
+    if surface_mode == "planar" and max_chart_stretch is not None:
+        refuse("max_chart_stretch requires mesh surface mode")
+    if surface_mode == "mesh":
+        max_chart_stretch = wg.check_chart_stretch_limit(max_chart_stretch)
+        if placement["offset_t_m"] != 0 or placement["offset_b_m"] != 0:
+            refuse("mesh offsets require a separately admitted persistent anchor")
+        if experimental_tracking:
+            refuse("experimental tracking contract currently supports planar export only")
     if type(experimental_tracking) is not bool:
         refuse("experimental_tracking must be boolean")
     output = Path(output_dir)
@@ -314,6 +376,28 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
             policy_sha256=ar._sha_file(Path(repo_root) / "bench/workbench_tracking_policy.py"),
             saved_rows_sha256=state["files"]["results.jsonl"], epoch=0)
     project, rgba, project_sha, png_sha = _project(project_path, expected_revision)
+    mesh_identity = None
+    if surface_mode == "mesh":
+        def current_mesh_identity():
+            current_texture, current_marker = prepare_mesh_artwork(rgba, artwork.marker, placement)
+            h, w = rgba.shape[:2]
+            edge = current_texture.shape[0]
+            physical = float(current_marker["size_object_units"])
+            return dict(surface_mode=surface_mode, max_chart_stretch=max_chart_stretch,
+                derived_marker=current_marker, derived_marker_sha256=wc.canonical_sha256(current_marker),
+                selected_rgba_sha256=wg.array_sha256(rgba), texture_sha256=wg.array_sha256(current_texture),
+                texture_shape=list(current_texture.shape), png_sha256=png_sha,
+                selected_shape=list(rgba.shape),
+                texel_padding=dict(top=(edge-h)//2, bottom=edge-h-(edge-h)//2,
+                                   left=(edge-w)//2, right=edge-w-(edge-w)//2),
+                selected_rectangle_size_m=dict(width=physical*w/edge, height=physical*h/edge),
+                vertices_sha256=wg.array_sha256(artwork.vertices), faces_sha256=wg.array_sha256(artwork.faces),
+                support_sha256=wg.array_sha256(artwork.support), placement=dict(placement),
+                sampler="floor_clamp_nearest_texel_cells; PNG top=+bitangent",
+                padding="transparent centered square, no resizing; odd extra bottom/right",
+                support_source="metric CAD geometry (not observation-derived)")
+        mesh_identity = current_mesh_identity()
+        mesh_identity_sha = wc.canonical_sha256(mesh_identity)
     sources = service._source_hashes(SOURCES)
     # Conservative incompressible frame allowance + container/index/sidecar headroom.
     frame_allowance = clip.width * clip.height * 8 + 65536
@@ -339,13 +423,23 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                 if (row.mask_frame_id != row.frame_id or mask is None or mask_ident["mask_sha256"] != row.mask_sha256):
                     refuse("observed row mask identity differs")
             reason, corners, composite = "saved_pose_or_fresh_mask_unavailable", None, rgb
+            geometry_stats = None
             trusted = row.mask_state == "observed" and mask is not None and bool(np.asarray(mask, bool).any())
             decision = _saved_display_decision(row, current_mask_trusted=trusted, epoch=tracking["epoch"])
             if decision.state == "measured" and decision.accepted_measured and decision.current_mask_trusted:
                 if _anchor_integrity(artwork) != anchor_sha:
                     refuse("anchor/chart changed before composition")
-                composite, reason, corners = compose_planar(rgb, rgba, mask, np.asarray(decision.pose, np.float64).reshape(4, 4), K,
-                    artwork.vertices, artwork.faces, artwork.marker, {**placement, "opacity": placement["opacity"] * decision.opacity})
+                if surface_mode == "mesh":
+                    if wc.canonical_sha256(current_mesh_identity()) != mesh_identity_sha:
+                        refuse("mesh composition identity changed")
+                    composite, reason, geometry_stats = compose_mesh(rgb, rgba, mask,
+                        np.asarray(decision.pose, np.float64).reshape(4, 4), K, artwork.vertices,
+                        artwork.faces, artwork.support, artwork.marker,
+                        {**placement, "opacity": placement["opacity"] * decision.opacity},
+                        max_chart_stretch=max_chart_stretch)
+                else:
+                    composite, reason, corners = compose_planar(rgb, rgba, mask, np.asarray(decision.pose, np.float64).reshape(4, 4), K,
+                        artwork.vertices, artwork.faces, artwork.marker, {**placement, "opacity": placement["opacity"] * decision.opacity})
             digest = wg.array_sha256(composite)
             writer.write(np.ascontiguousarray(composite[:, :, ::-1]))
             if video.exists() and video.stat().st_size > (index+1) * frame_allowance + (1 << 20):
@@ -354,6 +448,8 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
             records.append(dict(output_index=index, original=row.to_dict(), source_rgb_sha256=image_ident["image_sha256"],
                                 display_decision=ar._plain(decision.to_dict()), expected_rgb_sha256=digest,
                                 render_reason=reason, projected_corners_px=corners))
+            if surface_mode == "mesh":
+                records[-1]["geometry_render_stats"] = geometry_stats
         writer.release()
         writer = None
         reader.close()
@@ -382,6 +478,8 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
         after = service._load_run(run_id)
         if _anchor_integrity(artwork) != anchor_sha:
             refuse("anchor/chart changed before publication")
+        if surface_mode == "mesh" and wc.canonical_sha256(current_mesh_identity()) != mesh_identity_sha:
+            refuse("mesh composition identity changed before publication")
         if experimental_tracking:
             current_tracking = _experimental_admission(clip, run, binding, artwork, bundle, K)
             if current_tracking["surface"] != tracking["surface"]:
@@ -408,7 +506,8 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
         for record in records:
             reason = record["render_reason"]
             reasons[reason] = reasons.get(reason, 0) + 1
-        rendered = reasons.get("rendered_planar_approximation", 0)
+        success_reason = "rendered_mesh_artwork" if surface_mode == "mesh" else "rendered_planar_approximation"
+        rendered = reasons.get(success_reason, 0)
         recorded_identity = rows[0].backend_identity
         states = {key: 0 for key in ("accepted_measurements", "proposed_predictions", "recovering", "lost", "unavailable", "render_unavailable")}
         for record in records:
@@ -421,7 +520,7 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                 states[original["pose_state"]] += 1
             else:
                 states["unavailable"] += 1
-            if record["render_reason"] != "rendered_planar_approximation":
+            if record["render_reason"] != success_reason:
                 states["render_unavailable"] += 1
         manifest = dict(schema=VERSION, source="offline_saved_pose_planar_artwork", new_neural_inference=False,
             new_pose_estimation=False, weights_loaded=False, quality_claim=False, audio_copied=False,
@@ -447,6 +546,14 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                     base_checkpoint_sha256=recorded_identity["base_checkpoint_sha256"], weights_loaded=False)),
             dependencies=dict(numpy=np.__version__, opencv=cv2.__version__),
             video=dict(file="playback.avi", bytes=video.stat().st_size, sha256=ar._sha_file(video)), rows=records)
+        if surface_mode == "mesh":
+            manifest["source"] = "offline_saved_pose_mesh_artwork"
+            manifest["limitation"] = ("Registered mesh depth/front/chart checks and current observed mask only; "
+                "no independent visibility proof, real curved attachment accuracy, or physical-phone validation.")
+            manifest["surface_mode"] = surface_mode
+            manifest["mesh"] = mesh_identity
+            manifest["provenance"]["mesh_composition_sha256"] = mesh_identity_sha
+            manifest.pop("plane")
         raw = wc.canonical_json(manifest)
         if len(raw) > 32 << 20:
             refuse("sidecar exceeds 32 MiB")

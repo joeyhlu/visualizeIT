@@ -562,8 +562,11 @@ def face_chart_stretches(vertices, faces, marker: Mapping[str, Any]) -> np.ndarr
 
 def marker_patch(vertices, faces, face_support: np.ndarray, marker: Mapping[str, Any], *,
                  min_support: int = 3, max_normal_angle_deg: float = 75.0, overlap_grid: int = 128,
-                 max_chart_stretch: float | None = None) -> dict:
+                 max_chart_stretch: float | None = None,
+                 conservative_chart_reach: bool = False) -> dict:
     """Connected supported faces around the anchor with valid (unfolded) chart coordinates."""
+    if type(conservative_chart_reach) is not bool:
+        raise GeometryError("conservative_chart_reach must be bool")
     v = np.asarray(vertices, dtype=np.float64)
     f = np.asarray(faces, dtype=np.int64)
     support = np.asarray(face_support)
@@ -609,7 +612,13 @@ def marker_patch(vertices, faces, face_support: np.ndarray, marker: Mapping[str,
                 continue
             rel = v[f[j]] - p
             chart = np.stack([rel @ t, rel @ b], axis=1)
-            if np.min(np.max(np.abs(chart), axis=1)) > reach:
+            if conservative_chart_reach:
+                # A large triangle may cross the chart without any vertex
+                # near it. Bounding-box intersection conservatively retains
+                # those candidates; exact chart sampling still clips pixels.
+                if np.any(chart.min(axis=0) > reach) or np.any(chart.max(axis=0) < -reach):
+                    continue
+            elif np.min(np.max(np.abs(chart), axis=1)) > reach:
                 continue
             chosen.add(j)
             queue.append(j)
@@ -703,6 +712,50 @@ def render_marker(vertices, faces, face_support, marker: Mapping[str, Any], artw
     rgba[ys[ok], xs[ok], 3] = 255
     stats["rendered_pixels"] = int(ok.sum())
     return {"rgba": rgba, "stats": stats}
+
+
+def render_marker_rgba(vertices, faces, face_support, marker: Mapping[str, Any],
+                       artwork_rgba: np.ndarray, K, pose, width: int, height: int,
+                       observed_mask: np.ndarray, *, raster: RasterResult | None = None,
+                       patch: dict | None = None, min_support: int = 3,
+                       max_chart_stretch: float | None = None) -> dict:
+    """Sample straight RGBA on the supported, depth-tested actual mesh.
+
+    RGB and alpha use the legacy nearest-neighbor sampler with one shared
+    geometry raster and current patch. Two CPU texture passes favor identical
+    visibility and UV rules over speed. Supplied patches are refreshed because
+    they cannot attest to current support or the requested chart guard.
+    """
+    art = np.asarray(artwork_rgba)
+    if art.dtype != np.uint8 or art.ndim != 3 or art.shape[2] != 4:
+        raise GeometryError("artwork must be RGBA uint8")
+    if max(art.shape[:2]) > 1024 or min(art.shape[:2]) < 8:
+        raise GeometryError("artwork edge must be within 8..1024 pixels")
+    if observed_mask is None:
+        raise GeometryError("an observed mask is required; projected silhouettes are not masks")
+    if np.asarray(observed_mask).shape != (height, width):
+        raise GeometryError("observed mask dimensions differ from the frame")
+    limit = check_chart_stretch_limit(max_chart_stretch)
+    patch = marker_patch(vertices, faces, face_support, marker, min_support=min_support,
+                         max_chart_stretch=limit, conservative_chart_reach=True)
+    if raster is None and len(patch["faces"]):
+        raster = rasterize(vertices, faces, K, pose, width, height)
+    common = dict(raster=raster, patch=patch, min_support=min_support)
+    result = render_marker(vertices, faces, face_support, marker, art[..., :3],
+                           K, pose, width, height, observed_mask, **common)
+    alpha_art = np.repeat(art[..., 3:4], 3, axis=2)
+    alpha = render_marker(vertices, faces, face_support, marker, alpha_art,
+                          K, pose, width, height, observed_mask, **common)
+    result["rgba"][..., 3] = alpha["rgba"][..., 0]
+    stats = result["stats"]
+    stats["chart_reach_policy"] = "conservative_triangle_bounds"
+    stats["geometry_rendered_pixels"] = stats["rendered_pixels"]
+    stats["rendered_pixels"] = int(np.count_nonzero(result["rgba"][..., 3]))
+    stats["alpha_zero_rejected_pixels"] = stats["geometry_rendered_pixels"] - stats["rendered_pixels"]
+    if limit is not None:
+        stats.update({k: patch[k] for k in ("chart_stretch_limit", "max_accepted_chart_stretch",
+                      "chart_stretch_rejected_faces", "chart_stretch_unavailable_faces")})
+    return result
 
 
 # --------------------------------------------------------------------------
