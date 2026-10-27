@@ -45,9 +45,9 @@ def _saved_display_decision(row, *, current_mask_trusted, epoch=0):
         accepted_measured=measured, current_mask_trusted=current_mask_trusted)
 
 
-def _anchor_integrity(artwork):
+def _anchor_integrity(artwork, marker=None):
     """Validate the actual persistent anchor consumed by composition, not a summary label."""
-    marker = artwork.marker
+    marker = artwork.marker if marker is None else marker
     vertices, faces = np.asarray(artwork.vertices), np.asarray(artwork.faces)
     fid = marker.get("face_id")
     bary = np.asarray(marker.get("barycentric"), dtype=np.float64)
@@ -62,6 +62,42 @@ def _anchor_integrity(artwork):
             or vertices.ndim != 2 or vertices.shape[1] != 3 or not np.isfinite(vertices).all()):
         refuse("anchor/chart integrity invalid")
     return wc.canonical_sha256(ar._plain(marker))
+
+
+def _mesh_anchor_request(path, clip, bundle, selection):
+    """Parse and hash one bounded request snapshot, with no alternative pose authority."""
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        refuse("mesh anchor request must be a regular non-symlink file")
+    raw = ar._read_bounded(path, 64 << 10)
+    request = wc.loads_strict(raw)
+    keys = {"schema", "clip_id", "frame_id", "pixel", "reviewed", "reviewed_by"}
+    if not isinstance(request, dict) or set(request) != keys:
+        refuse("mesh anchor request must contain exactly the v1 fields")
+    if (request["schema"] != "workbench_mesh_anchor_v1"
+            or type(request["clip_id"]) is not str or request["clip_id"] != clip.clip_id
+            or type(request["frame_id"]) is not str
+            or request["frame_id"] != bundle.seed_frame_id or request["frame_id"] != selection.frame_id
+            or request["reviewed"] is not True or type(request["reviewed_by"]) is not str
+            or not request["reviewed_by"].strip()):
+        refuse("mesh anchor requires reviewed matching clip and original authorized seed frame")
+    pixel = request["pixel"]
+    if (type(pixel) is not list or len(pixel) != 2
+            or any(type(x) not in (int, float) or not math.isfinite(x) for x in pixel)
+            or not (-0.5 <= pixel[0] < clip.width - .5 and -.5 <= pixel[1] < clip.height - .5)):
+        refuse("mesh anchor requires finite source pixel coordinates within frame bounds")
+    return request, hashlib.sha256(raw).hexdigest()
+
+
+def _mesh_anchor_seed_identity(workspace, clip, seed_frame_id):
+    from .workbench_cli import FrameReader
+    reader = FrameReader(workspace, clip)
+    try:
+        media, frames = reader.verify_media(), reader.verify_frames([seed_frame_id])
+        _, decoded = reader.read(clip.frame(seed_frame_id))
+        return dict(media=media, source_frames=frames, decoded=decoded)
+    finally:
+        reader.close()
 
 
 def _experimental_admission(clip, run, binding, artwork, bundle, K):
@@ -264,7 +300,8 @@ def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker
 
 def export_saved_window(workspace, *, run_id, role, project_path, expected_revision, bundle_path,
                         bundle_sha256, admission_dir, output_dir, playback_fps, placement=None, repo_root=ROOT,
-                        experimental_tracking=False, surface_mode="planar", max_chart_stretch=None):
+                        experimental_tracking=False, surface_mode="planar", max_chart_stretch=None,
+                        mesh_anchor_path=None):
     """Publish a new derived directory only after complete video decode and input reauthentication."""
     from . import workbench_cli as cli, workbench_frame_boundary as fb, workbench_neural as wn
     from .vision import cv2
@@ -277,6 +314,8 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
         refuse("surface_mode must be planar or mesh")
     if surface_mode == "planar" and max_chart_stretch is not None:
         refuse("max_chart_stretch requires mesh surface mode")
+    if mesh_anchor_path is not None and surface_mode != "mesh":
+        refuse("mesh_anchor_path requires mesh surface mode")
     if surface_mode == "mesh":
         max_chart_stretch = wg.check_chart_stretch_limit(max_chart_stretch)
         if placement["offset_t_m"] != 0 or placement["offset_b_m"] != 0:
@@ -358,6 +397,29 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
     if artwork.sha256 != saved_sha or wc.canonical_json(ar._plain(artwork.record)) != wc.canonical_json(saved):
         refuse("saved anchor/original artwork record differs")
     anchor_sha = _anchor_integrity(artwork)
+    mesh_marker = artwork.marker
+    mesh_anchor = None
+    if mesh_anchor_path is not None:
+        request, request_sha = _mesh_anchor_request(mesh_anchor_path, clip, bundle, selection)
+        seed_identity = _mesh_anchor_seed_identity(workspace, clip, bundle.seed_frame_id)
+        hit = wg.anchor_from_pixel(artwork.vertices, artwork.faces, K, bundle.seed_pose_m,
+            *request["pixel"], width=clip.width, height=clip.height, observed_mask=selection_mask)
+        mesh_marker = wg.make_marker(artwork.vertices, artwork.faces, hit, bundle.seed_pose_m,
+            artwork.marker["size_object_units"], artwork.marker["artwork_sha256"])
+        mesh_anchor = dict(schema="workbench_mesh_anchor_revision_v1", source="manual_reviewed_seed_placement",
+            historical_render_reproduction=False, request=request, request_sha256=request_sha,
+            marker=mesh_marker, marker_sha256=_anchor_integrity(artwork, mesh_marker),
+            anchor_object_xyz_m=(np.asarray(mesh_marker["barycentric"]) @
+                artwork.vertices[artwork.faces[mesh_marker["face_id"]]]).tolist(),
+            original_artwork_record_sha256=saved_sha, original_anchor_sha256=anchor_sha,
+            seed=dict(**seed_identity, pose_authority="metric_bundle_authorized_seed_pose",
+                frame_id=bundle.seed_frame_id, seed_label=bundle.seed_label,
+                pose_m=ar._plain(bundle.seed_pose_m), pose_sha256=wc.canonical_sha256(ar._plain(bundle.seed_pose_m)),
+                observed_mask_sha256=wg.array_sha256(selection_mask), mask_files=mask_files,
+                bundle_files={key: str(value) if isinstance(value, Path) else value
+                              for key, value in bundle_files.items()}, glb_sha256=bundle.glb_sha256,
+                effective_K=K.ravel().tolist(), principal_point_origin=bundle.principal_point_origin))
+        mesh_anchor_sha = wc.canonical_sha256(mesh_anchor)
     tracking = (_experimental_admission(clip, run, binding, artwork, bundle, K) if experimental_tracking else
         dict(mode="legacy_saved_context", prefix_verified=False, checkpoint_restored=False, epoch=0,
              predictions_enabled=False, limitation="Authenticated historical rows; causal prefix is not replayed."))
@@ -379,11 +441,11 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
     mesh_identity = None
     if surface_mode == "mesh":
         def current_mesh_identity():
-            current_texture, current_marker = prepare_mesh_artwork(rgba, artwork.marker, placement)
+            current_texture, current_marker = prepare_mesh_artwork(rgba, mesh_marker, placement)
             h, w = rgba.shape[:2]
             edge = current_texture.shape[0]
             physical = float(current_marker["size_object_units"])
-            return dict(surface_mode=surface_mode, max_chart_stretch=max_chart_stretch,
+            identity = dict(surface_mode=surface_mode, max_chart_stretch=max_chart_stretch,
                 derived_marker=current_marker, derived_marker_sha256=wc.canonical_sha256(current_marker),
                 selected_rgba_sha256=wg.array_sha256(rgba), texture_sha256=wg.array_sha256(current_texture),
                 texture_shape=list(current_texture.shape), png_sha256=png_sha,
@@ -396,6 +458,9 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                 sampler="floor_clamp_nearest_texel_cells; PNG top=+bitangent",
                 padding="transparent centered square, no resizing; odd extra bottom/right",
                 support_source="metric CAD geometry (not observation-derived)")
+            if mesh_anchor is not None:
+                identity["mesh_anchor_revision_sha256"] = wc.canonical_sha256(mesh_anchor)
+            return identity
         mesh_identity = current_mesh_identity()
         mesh_identity_sha = wc.canonical_sha256(mesh_identity)
     sources = service._source_hashes(SOURCES)
@@ -434,7 +499,7 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                         refuse("mesh composition identity changed")
                     composite, reason, geometry_stats = compose_mesh(rgb, rgba, mask,
                         np.asarray(decision.pose, np.float64).reshape(4, 4), K, artwork.vertices,
-                        artwork.faces, artwork.support, artwork.marker,
+                        artwork.faces, artwork.support, mesh_marker,
                         {**placement, "opacity": placement["opacity"] * decision.opacity},
                         max_chart_stretch=max_chart_stretch)
                 else:
@@ -502,6 +567,14 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                 refuse("source decoded RGB changed before publication")
         reader.close()
         reader = None
+        if mesh_anchor is not None:
+            if (_mesh_anchor_request(mesh_anchor_path, clip, bundle, selection) != (request, request_sha)
+                    or _mesh_anchor_seed_identity(workspace, clip, bundle.seed_frame_id) != seed_identity
+                    or wg.array_sha256(fresh.load(selection.frame_id, (clip.height, clip.width))[0]) !=
+                        mesh_anchor["seed"]["observed_mask_sha256"]
+                    or _anchor_integrity(artwork, mesh_marker) != mesh_anchor["marker_sha256"]
+                    or wc.canonical_sha256(mesh_anchor) != mesh_anchor_sha):
+                refuse("manual mesh anchor input/seed/revision changed before publication")
         reasons = {}
         for record in records:
             reason = record["render_reason"]
@@ -554,6 +627,8 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
             manifest["mesh"] = mesh_identity
             manifest["provenance"]["mesh_composition_sha256"] = mesh_identity_sha
             manifest.pop("plane")
+            if mesh_anchor is not None:
+                manifest["mesh_anchor"] = mesh_anchor
         raw = wc.canonical_json(manifest)
         if len(raw) > 32 << 20:
             refuse("sidecar exceeds 32 MiB")
