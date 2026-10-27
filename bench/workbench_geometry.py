@@ -718,14 +718,21 @@ def render_marker_rgba(vertices, faces, face_support, marker: Mapping[str, Any],
                        artwork_rgba: np.ndarray, K, pose, width: int, height: int,
                        observed_mask: np.ndarray, *, raster: RasterResult | None = None,
                        patch: dict | None = None, min_support: int = 3,
-                       max_chart_stretch: float | None = None) -> dict:
+                       max_chart_stretch: float | None = None,
+                       artwork_region_raster: bool = False) -> dict:
     """Sample straight RGBA on the supported, depth-tested actual mesh.
 
     RGB and alpha use the legacy nearest-neighbor sampler with one shared
     geometry raster and current patch. Two CPU texture passes favor identical
     visibility and UV rules over speed. Supplied patches are refreshed because
     they cannot attest to current support or the requested chart guard.
+
+    ``artwork_region_raster`` restricts an internally generated raster to the
+    current patch's projected bounds, retaining every mesh face as an occluder.
+    Supplied rasters are used unchanged. The default raster remains full-frame.
     """
+    if type(artwork_region_raster) is not bool:
+        raise GeometryError("artwork_region_raster must be bool")
     art = np.asarray(artwork_rgba)
     if art.dtype != np.uint8 or art.ndim != 3 or art.shape[2] != 4:
         raise GeometryError("artwork must be RGBA uint8")
@@ -739,7 +746,20 @@ def render_marker_rgba(vertices, faces, face_support, marker: Mapping[str, Any],
     patch = marker_patch(vertices, faces, face_support, marker, min_support=min_support,
                          max_chart_stretch=limit, conservative_chart_reach=True)
     if raster is None and len(patch["faces"]):
-        raster = rasterize(vertices, faces, K, pose, width, height)
+        if artwork_region_raster:
+            roi = None
+            pv = np.unique(np.asarray(faces)[patch["faces"]])
+            uv, z = project(np.asarray(vertices, dtype=np.float64)[pv], K, pose)
+            # Match rasterize's default near plane. Projection bounds are only
+            # conservative without near clipping; equality also falls back.
+            if len(pv) and np.all(z > 1e-3) and np.isfinite(uv).all():
+                roi = (int(math.floor(uv[:, 0].min())) - 1,
+                       int(math.floor(uv[:, 1].min())) - 1,
+                       int(math.ceil(uv[:, 0].max())) + 1,
+                       int(math.ceil(uv[:, 1].max())) + 1)
+            raster = rasterize(vertices, faces, K, pose, width, height, roi=roi)
+        else:
+            raster = rasterize(vertices, faces, K, pose, width, height)
     common = dict(raster=raster, patch=patch, min_support=min_support)
     result = render_marker(vertices, faces, face_support, marker, art[..., :3],
                            K, pose, width, height, observed_mask, **common)
