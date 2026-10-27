@@ -351,14 +351,14 @@ def _raster_triangle(fid, verts, fx, fy, cx, cy, width, height, depth, face_id, 
     inv_z = w.sum(axis=-1)
     with np.errstate(divide="ignore", invalid="ignore"):
         zz = 1.0 / inv_z
-        orig = (w[..., :, None] * B[None, None, :, :]).sum(axis=-2) / inv_z[..., None]
-    region_depth = depth[y0:y1 + 1, x0:x1 + 1]
-    closer = inside & (zz > 0) & (zz < region_depth)
-    if not closer.any():
-        return
+        region_depth = depth[y0:y1 + 1, x0:x1 + 1]
+        closer = inside & (zz > 0) & (zz < region_depth)
+        if not closer.any():
+            return
+        orig = (w[closer, :, None] * B[None, :, :]).sum(axis=-2) / inv_z[closer, None]
     region_depth[closer] = zz[closer]
     face_id[y0:y1 + 1, x0:x1 + 1][closer] = fid
-    bary[y0:y1 + 1, x0:x1 + 1][closer] = orig[closer]
+    bary[y0:y1 + 1, x0:x1 + 1][closer] = orig
 
 
 def surface_points(vertices: np.ndarray, faces: np.ndarray, face_ids: np.ndarray,
