@@ -20,6 +20,7 @@ class IntSubclass(int):
 class IndependentObjectIdentityChecks(unittest.TestCase):
     def setUp(self):
         scratch = Path(__file__).resolve().parents[1] / '.cache'
+        scratch.mkdir(parents=True, exist_ok=True)
         self.temporary = tempfile.TemporaryDirectory(dir=scratch)
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
