@@ -2612,6 +2612,12 @@ def glb_mesh(path: Path, *, max_faces: int = 2_000_000) -> tuple[np.ndarray, np.
     transform applied (same frame as the GoTrack renderer). Unsupported glTF
     features (external buffers, sparse accessors, non-triangle modes) are rejected."""
     raw = _regular(Path(path), "metric mesh GLB").read_bytes()
+    return _glb_mesh_bytes(raw, max_faces=max_faces)
+
+
+def _glb_mesh_bytes(raw: bytes, *, max_faces: int = 2_000_000,
+                    _face_inventory: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Parse frozen GLB bytes without reopening a path after authentication."""
     magic, version, length = struct.unpack_from("<4sII", raw, 0)
     if magic != b"glTF" or version != 2 or length != len(raw):
         raise AdmissionError("not a glTF 2.0 binary container")
@@ -2672,7 +2678,162 @@ def glb_mesh(path: Path, *, max_faces: int = 2_000_000) -> tuple[np.ndarray, np.
     if len(f) > max_faces or not np.isfinite(v).all():
         raise AdmissionError("GLB geometry is too large or non-finite")
     keep = (f[:, 0] != f[:, 1]) & (f[:, 1] != f[:, 2]) & (f[:, 0] != f[:, 2])
+    if _face_inventory is not None:
+        _face_inventory.update(raw_faces=int(len(f)), source_indices=np.flatnonzero(keep))
     return v, f[keep]
+
+
+def _overlay_proxy_mesh(bundle: MetricBundle, manifest_path: Path, manifest_sha256: str,
+                        reviewed_deviation_m: float, max_faces: int) -> tuple[np.ndarray, np.ndarray, dict, tuple]:
+    """Validate an explicitly selected render-only proxy; never modify the bundle.
+
+    Both JSON files have exact schemas and externally pinned byte identities.
+    Each direction maps every source triangle's three vertices into ONE target
+    triangle using simplex barycentrics. Convex interpolation then bounds every
+    point of that source triangle by the largest of its three vertex residuals.
+    This is a sufficient surface-distance bound, not a nearest-distance estimate,
+    visibility test, attachment-quality assessment or tracking validation.
+    Canonical correspondence indices address effective valid faces in the
+    existing flattened GLB parser order, after repeated-index and exactly-zero
+    cross-norm faces are removed. This filtering is overlay-only; raw canonical
+    bytes and the public/default mesh reader's output are unchanged.
+    """
+    limit = wc._float(reviewed_deviation_m, "reviewed_deviation_m", minimum=0)
+    cap = wc._int(max_faces, "overlay max_faces", minimum=1, maximum=200_000)
+
+    def document(path, digest, name):
+        path = _regular(Path(path), name)
+        wc._sha(digest, name + " SHA-256")
+        # Explicit bounded receipts, including mappings; no implicit discovery.
+        if path.stat().st_size > 128 * 1024 * 1024:
+            raise AdmissionError(name + " exceeds 128 MiB")
+        raw = path.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != digest:
+            raise AdmissionError(name + " SHA-256 differs")
+        return path, wc.loads_strict(raw)
+
+    manifest_path, manifest = document(manifest_path, manifest_sha256, "overlay proxy manifest")
+    manifest = wc._keys(manifest, ("schema", "obj_id", "units", "coordinate_frame", "canonical_glb_sha256",
+                                  "overlay_glb_path", "overlay_glb_sha256", "receipt_path", "receipt_sha256"),
+                        name="overlay proxy manifest")
+    if manifest["schema"] != "workbench_overlay_proxy_v1":
+        raise AdmissionError("overlay proxy manifest schema differs")
+    identity = {"obj_id": wc._int(bundle.obj_id, "bundle obj_id", maximum=2**31 - 1),
+                "units": "metres", "coordinate_frame": "canonical_object_frame",
+                "canonical_glb_sha256": wc._sha(bundle.glb_sha256, "canonical GLB SHA-256")}
+
+    def check_identity(row):
+        wc._int(row["obj_id"], "proxy obj_id", maximum=2**31 - 1)
+        for key, value in identity.items():
+            if row[key] != value:
+                raise AdmissionError("overlay proxy " + key + " differs")
+
+    check_identity(manifest)
+    canonical_raw = _regular(bundle.glb_path, "canonical GLB").read_bytes()
+    if hashlib.sha256(canonical_raw).hexdigest() != bundle.glb_sha256:
+        raise AdmissionError("overlay proxy canonical GLB bytes differ")
+
+    def relative_file(value, name):
+        value = Path(wc._str(value, name, max_len=4096))
+        return value if value.is_absolute() else manifest_path.parent / value
+
+    overlay_path = _regular(relative_file(manifest["overlay_glb_path"], "overlay GLB path"), "overlay GLB")
+    overlay_sha = wc._sha(manifest["overlay_glb_sha256"], "overlay GLB SHA-256")
+    overlay_raw = overlay_path.read_bytes()
+    if hashlib.sha256(overlay_raw).hexdigest() != overlay_sha:
+        raise AdmissionError("overlay GLB bytes differ")
+    _, receipt = document(relative_file(manifest["receipt_path"], "receipt path"),
+                          manifest["receipt_sha256"], "overlay correspondence receipt")
+    receipt = wc._keys(receipt, ("schema", *identity, "overlay_glb_sha256", "max_deviation_m",
+                                "canonical_to_overlay", "overlay_to_canonical"), name="overlay receipt")
+    if receipt["schema"] != "workbench_overlay_correspondence_v1":
+        raise AdmissionError("overlay receipt schema differs")
+    check_identity(receipt)
+    if receipt["overlay_glb_sha256"] != overlay_sha:
+        raise AdmissionError("overlay receipt GLB identity differs")
+    declared = wc._float(receipt["max_deviation_m"], "receipt max_deviation_m", minimum=0, maximum=limit)
+    canonical_inventory = {}
+    canonical_v, canonical_f = _glb_mesh_bytes(canonical_raw, _face_inventory=canonical_inventory)
+    overlay_inventory = {}
+    overlay_v, overlay_f = _glb_mesh_bytes(overlay_raw, max_faces=cap, _face_inventory=overlay_inventory)
+    del canonical_raw, overlay_raw
+    if overlay_inventory["raw_faces"] != len(overlay_f):
+        raise AdmissionError("overlay proxy contains parser-discarded repeated-index triangles")
+    from . import workbench_geometry as wg
+    for vertices, faces in ((canonical_v, canonical_f), (overlay_v, overlay_f)):
+        if len(faces) == 0 or faces.min() < 0 or faces.max() >= len(vertices):
+            raise AdmissionError("overlay correspondence geometry has invalid triangles")
+    canonical_valid = np.linalg.norm(wg.face_cross(canonical_v, canonical_f), axis=1) != 0
+    canonical_zero_area_count = int(np.count_nonzero(~canonical_valid))
+    canonical_f = canonical_f[canonical_valid]
+    canonical_source_indices = canonical_inventory["source_indices"][canonical_valid]
+    if (len(canonical_f) == 0
+            or np.any(np.linalg.norm(wg.face_cross(overlay_v, overlay_f), axis=1) == 0)):
+        raise AdmissionError("overlay correspondence geometry has no valid canonical faces or degenerate proxy triangles")
+    if len(overlay_f) > len(canonical_f):
+        raise AdmissionError("overlay proxy must not increase the effective canonical face count")
+    if not all(wg.orientation_consistent(overlay_f)):
+        raise AdmissionError("overlay proxy must be consistently oriented and edge-manifold")
+
+    def has_boundary(faces):
+        edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
+        return bool(np.any(np.unique(edges, axis=0, return_counts=True)[1] == 1))
+
+    if not has_boundary(canonical_f) and has_boundary(overlay_f):
+        raise AdmissionError("overlay proxy introduces a boundary into closed canonical geometry")
+
+    def directed_bound(mapping, source_v, source_f, target_v, target_f):
+        mapping = wc._keys(mapping, ("target_faces", "barycentrics"), name="triangle mapping")
+        ids = mapping["target_faces"]
+        if not isinstance(ids, list) or len(ids) != len(source_f):
+            raise AdmissionError("overlay correspondence must cover every source triangle")
+        ids = np.array([wc._int(i, "target face", maximum=len(target_f) - 1) for i in ids], dtype=np.int64)
+        # Refuse booleans, strings and ragged numeric data before conversion.
+        values = mapping["barycentrics"]
+        if (not isinstance(values, list) or len(values) != len(source_f)
+                or any(not isinstance(row, list) or len(row) != 3
+                       or any(not isinstance(triple, list) or len(triple) != 3
+                              or any(type(x) not in (int, float) for x in triple) for triple in row)
+                       for row in values)):
+            raise AdmissionError("overlay correspondence needs numeric barycentric triples")
+        bary = np.asarray(values)
+        if bary.dtype.kind not in "ifu" or bary.shape != (len(source_f), 3, 3):
+            raise AdmissionError("overlay correspondence needs three barycentrics per source triangle")
+        bary = bary.astype(np.float64)
+        if (not np.isfinite(bary).all() or np.any(bary < 0) or np.any(bary > 1)
+                or np.any(bary.sum(axis=2) != 1.0)):
+            raise AdmissionError("overlay correspondence barycentrics must lie on the target simplex")
+        mapped = np.einsum("fij,fjk->fik", bary, target_v[target_f[ids]])
+        normal_dot = np.einsum("fi,fi->f", wg.face_cross(source_v, source_f),
+                               wg.face_cross(target_v, target_f[ids]))
+        if np.any(normal_dot <= 0):
+            raise AdmissionError("overlay correspondence has flipped or perpendicular target faces")
+        bound = float(np.linalg.norm(source_v[source_f] - mapped, axis=2).max())
+        if not math.isfinite(bound) or bound > declared:
+            raise AdmissionError("recomputed overlay deviation exceeds the authenticated reviewed bound")
+        return bound
+
+    forward = directed_bound(receipt["canonical_to_overlay"], canonical_v, canonical_f, overlay_v, overlay_f)
+    reverse = directed_bound(receipt["overlay_to_canonical"], overlay_v, overlay_f, canonical_v, canonical_f)
+    return overlay_v, overlay_f, {
+        "schema": "workbench_overlay_proxy_binding_v1", **identity,
+        "overlay_glb_path": str(overlay_path), "overlay_glb_sha256": overlay_sha,
+        "manifest_sha256": manifest_sha256, "receipt_sha256": manifest["receipt_sha256"],
+        "reviewed_deviation_m": limit, "receipt_max_deviation_m": declared,
+        "canonical_to_overlay_bound_m": forward, "overlay_to_canonical_bound_m": reverse,
+        "canonical_faces": int(len(canonical_f)), "overlay_faces": int(len(overlay_f)),
+        "canonical_raw_faces": canonical_inventory["raw_faces"],
+        "canonical_effective_faces": int(len(canonical_f)),
+        "canonical_dropped_repeated_index_faces": canonical_inventory["raw_faces"] - len(canonical_valid),
+        "canonical_dropped_zero_area_faces": canonical_zero_area_count,
+        "canonical_face_index_space": "effective_valid_faces_in_original_flattened_glb_parser_order",
+        "canonical_source_index_digest": {
+            "algorithm": "sha256_little_endian_int64_original_flattened_glb_face_indices_v1",
+            "sha256": hashlib.sha256(np.asarray(canonical_source_indices, dtype="<i8").tobytes()).hexdigest()},
+        "artwork_size_source": "canonical_metric_extent",
+        "topology_scope": "local orientation, edge-manifold and boundary checks; full topology equivalence unverified",
+        "scope": "experimental render-only proxy; tracking, visibility and attachment quality unverified",
+        "quality_claim": False}, (canonical_v, canonical_f, receipt["canonical_to_overlay"]["target_faces"])
 
 
 class NeuralArtwork:
@@ -2681,11 +2842,19 @@ class NeuralArtwork:
     on the seed (selection) frame, ray-cast with the labelled seed pose. Units
     are metres. Face support comes from CAD geometry (not observation); folded,
     steep, back-facing, overlapped or mask-outside pixels are still suppressed,
-    and nothing renders without a validated current pose and observed mask."""
+    and nothing renders without a validated current pose and observed mask.
+
+    ``overlay_proxy_manifest`` explicitly opts into a render-only alternative.
+    It requires an externally reviewed exact manifest SHA and a caller-reviewed
+    deviation limit in metres; neither a proxy nor a limit is ever discovered.
+    Existing CLI/export/replay callers continue using canonical geometry.
+    """
 
     def __init__(self, bundle: MetricBundle, selection: wc.Selection, artwork_kind: str, *, clip_K,
                  width: int, height: int, selection_mask: np.ndarray | None, size_fraction: float = 0.25,
-                 max_faces: int = 200_000, max_chart_stretch: float | None = None):
+                 max_faces: int = 200_000, max_chart_stretch: float | None = None,
+                 overlay_proxy_manifest: Path | None = None, overlay_proxy_manifest_sha256: str | None = None,
+                 reviewed_proxy_deviation_m: float | None = None):
         from . import workbench_geometry as wg
         self._max_chart_stretch = wg.check_chart_stretch_limit(max_chart_stretch)
         if bundle.seed_pose_m is None:
@@ -2695,14 +2864,39 @@ class NeuralArtwork:
                                     f"({selection.frame_id} != {bundle.seed_frame_id})")
         if artwork_kind not in ("checkerboard", "directional"):
             raise NeuralUnavailable("only fixed built-in artwork is bound for neural roles")
-        v, f = glb_mesh(bundle.glb_path, max_faces=max_faces)
+        proxy_binding = None
+        if overlay_proxy_manifest is None:
+            if overlay_proxy_manifest_sha256 is not None or reviewed_proxy_deviation_m is not None:
+                raise AdmissionError("overlay proxy authentication requires an explicit manifest path")
+            v, f = glb_mesh(bundle.glb_path, max_faces=max_faces)
+        else:
+            v, f, proxy_binding, canonical_geometry = _overlay_proxy_mesh(bundle, overlay_proxy_manifest,
+                overlay_proxy_manifest_sha256, reviewed_proxy_deviation_m, max_faces)
         self.vertices, self.faces = v, f.astype(np.int64)
         self.K = native_K(np.asarray(clip_K, float).ravel(), bundle.principal_point_origin)
         self.width, self.height = width, height
         u, vv = selection.positive[0]
         hit = wg.anchor_from_pixel(v, f, self.K, bundle.seed_pose_m, u, vv, width=width, height=height,
                                    observed_mask=selection_mask)
-        size = size_fraction * float(np.max(np.ptp(v, axis=0)))
+        if proxy_binding is not None:
+            if selection_mask is None:
+                raise AdmissionError("overlay proxy anchor requires the observed selection mask")
+            canonical_v, canonical_f, canonical_targets = canonical_geometry
+            canonical_hit = wg.anchor_from_pixel(canonical_v, canonical_f, self.K, bundle.seed_pose_m, u, vv,
+                                                width=width, height=height, observed_mask=selection_mask)
+            anchor_error = float(np.linalg.norm(canonical_hit["point"] - hit["point"]))
+            normal_dot = float(wg.face_normals(canonical_v, canonical_f[[canonical_hit["face_id"]]])[0]
+                               @ wg.face_normals(v, f[[hit["face_id"]]])[0])
+            if (canonical_targets[canonical_hit["face_id"]] != hit["face_id"]
+                    or anchor_error > reviewed_proxy_deviation_m or normal_dot <= 0):
+                raise AdmissionError("overlay proxy seed anchor differs beyond the reviewed bound or is flipped")
+            proxy_binding["anchor_comparison"] = {
+                "canonical_point_m": canonical_hit["point"].tolist(), "overlay_point_m": hit["point"].tolist(),
+                "displacement_m": anchor_error, "normal_dot": normal_dot,
+                "canonical_face_id": canonical_hit["face_id"], "overlay_face_id": hit["face_id"],
+                "canonical_barycentric": canonical_hit["barycentric"].tolist()}
+        size_vertices = canonical_v if proxy_binding is not None else v
+        size = size_fraction * float(np.max(np.ptp(size_vertices, axis=0)))
         self.art = wg.builtin_artwork(artwork_kind, 256)
         art_sha = wg.array_sha256(self.art)
         self.marker = wg.make_marker(v, f, hit, bundle.seed_pose_m, size, art_sha)
@@ -2716,6 +2910,8 @@ class NeuralArtwork:
                        "principal_point_origin": bundle.principal_point_origin, "effective_K": self.K.ravel().tolist(),
                        "patch_faces": int(len(self.patch["faces"])), "mesh_faces": int(len(f)),
                        "anchor_mask_checked": selection_mask is not None}
+        if proxy_binding is not None:
+            self.record["overlay_proxy"] = proxy_binding
         if self.max_chart_stretch is not None:
             self.record["chart_stretch_policy"] = {"kind": "local_inverse_orthogonal_projection_v1",
                                                   "max_chart_stretch": self.max_chart_stretch}
