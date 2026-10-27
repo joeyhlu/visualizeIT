@@ -719,7 +719,8 @@ def render_marker_rgba(vertices, faces, face_support, marker: Mapping[str, Any],
                        observed_mask: np.ndarray, *, raster: RasterResult | None = None,
                        patch: dict | None = None, min_support: int = 3,
                        max_chart_stretch: float | None = None,
-                       artwork_region_raster: bool = False) -> dict:
+                        artwork_region_raster: bool = False,
+                        _prepared_patch: Mapping[str, Any] | None = None) -> dict:
     """Sample straight RGBA on the supported, depth-tested actual mesh.
 
     RGB and alpha use the legacy nearest-neighbor sampler with one shared
@@ -743,8 +744,11 @@ def render_marker_rgba(vertices, faces, face_support, marker: Mapping[str, Any],
     if np.asarray(observed_mask).shape != (height, width):
         raise GeometryError("observed mask dimensions differ from the frame")
     limit = check_chart_stretch_limit(max_chart_stretch)
-    patch = marker_patch(vertices, faces, face_support, marker, min_support=min_support,
-                         max_chart_stretch=limit, conservative_chart_reach=True)
+    # Only the export's privately owned, input-checked preparation may use this
+    # internal seam. The historical public ``patch`` argument remains ignored.
+    patch = (_prepared_patch if _prepared_patch is not None else
+             marker_patch(vertices, faces, face_support, marker, min_support=min_support,
+                          max_chart_stretch=limit, conservative_chart_reach=True))
     if raster is None and len(patch["faces"]):
         if artwork_region_raster:
             roi = None
@@ -760,6 +764,9 @@ def render_marker_rgba(vertices, faces, face_support, marker: Mapping[str, Any],
             raster = rasterize(vertices, faces, K, pose, width, height, roi=roi)
         else:
             raster = rasterize(vertices, faces, K, pose, width, height)
+    # render_marker refreshes patches under a stretch guard for public callers.
+    # The export has already bound and checked this prepared patch, so avoid
+    # rebuilding it in either texture pass while preserving the final stats.
     common = dict(raster=raster, patch=patch, min_support=min_support)
     result = render_marker(vertices, faces, face_support, marker, art[..., :3],
                            K, pose, width, height, observed_mask, **common)

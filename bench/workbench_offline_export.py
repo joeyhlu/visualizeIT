@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import dataclass
 import hashlib
 import math
 import os
 from pathlib import Path
 import shutil
 import sys
+from types import MappingProxyType
 import uuid
 
 import numpy as np
@@ -274,8 +276,75 @@ def prepare_mesh_artwork(rgba, marker, placement=None):
     return padded, derived
 
 
+def _immutable_array(value):
+    """Own array bytes with a read-only backing object, not a mutable view."""
+    array = np.ascontiguousarray(value)
+    return np.frombuffer(array.tobytes(), dtype=array.dtype).reshape(array.shape)
+
+
+def _immutable_value(value):
+    if isinstance(value, np.ndarray):
+        return _immutable_array(value)
+    if isinstance(value, dict):
+        return MappingProxyType({key: _immutable_value(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_immutable_value(item) for item in value)
+    return value
+
+
+def _mesh_geometry_placement(placement):
+    # Opacity is a current display decision; it does not affect patch geometry.
+    p = placement_values(placement)
+    return tuple(p[key] for key in ("scale", "rotation_deg", "offset_t_m", "offset_b_m"))
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedMeshArtwork:
+    """Owned, export-local fixed artwork and patch; never owns a frame pose/mask."""
+    _texture: np.ndarray
+    _marker: MappingProxyType
+    _patch: MappingProxyType
+    _vertices: np.ndarray
+    _faces: np.ndarray
+    _support: np.ndarray
+    _source: tuple
+    _placement: tuple
+    _chart_limit: float | None
+    _owner: str | None
+
+    def verify(self, rgba, vertices, faces, face_support, marker, placement,
+               *, max_chart_stretch=None, owner=None):
+        actual = (wg.array_sha256(rgba), wg.array_sha256(vertices),
+                  wg.array_sha256(faces), wg.array_sha256(face_support),
+                  wc.canonical_sha256(ar._plain(marker)))
+        if (actual != self._source or _mesh_geometry_placement(placement) != self._placement
+                or wg.check_chart_stretch_limit(max_chart_stretch) != self._chart_limit
+                or (None if owner is None else str(owner)) != self._owner):
+            refuse("prepared mesh artwork source, placement, policy or export owner changed")
+
+
+def prepare_mesh_artwork_state(rgba, vertices, faces, face_support, marker, placement=None,
+                               *, max_chart_stretch=None, owner=None):
+    """Prepare only fixed mesh/artwork data, with private immutable ownership."""
+    p = placement_values(placement)
+    limit = wg.check_chart_stretch_limit(max_chart_stretch)
+    texture, derived = prepare_mesh_artwork(rgba, marker, p)
+    owned_vertices = _immutable_array(vertices)
+    owned_faces = _immutable_array(faces)
+    owned_support = _immutable_array(face_support)
+    owned_marker = _immutable_value(ar._plain(derived))
+    patch = wg.marker_patch(owned_vertices, owned_faces, owned_support, owned_marker,
+                            max_chart_stretch=limit, conservative_chart_reach=True)
+    return PreparedMeshArtwork(_immutable_array(texture), owned_marker, _immutable_value(patch),
+        owned_vertices, owned_faces, owned_support,
+        (wg.array_sha256(rgba), wg.array_sha256(vertices), wg.array_sha256(faces),
+         wg.array_sha256(face_support), wc.canonical_sha256(ar._plain(marker))),
+        _mesh_geometry_placement(p), limit, None if owner is None else str(owner))
+
+
 def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker,
-                 placement=None, *, max_chart_stretch=None, artwork_region_raster=False):
+                 placement=None, *, max_chart_stretch=None, artwork_region_raster=False,
+                 prepared_mesh_artwork=None, prepared_owner=None):
     """Actual registered mesh visibility and straight-alpha, half-up RGB composition."""
     if type(artwork_region_raster) is not bool:
         refuse("artwork_region_raster must be boolean")
@@ -285,11 +354,24 @@ def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker
         refuse("source must be uint8 RGB")
     if mask is None or np.asarray(mask).shape != rgb.shape[:2]:
         refuse("observed mask dimensions differ")
-    texture, derived = prepare_mesh_artwork(rgba, marker, p)
+    if prepared_mesh_artwork is None:
+        texture, derived = prepare_mesh_artwork(rgba, marker, p)
+        render_vertices, render_faces, render_support, patch = vertices, faces, face_support, None
+    else:
+        if type(prepared_mesh_artwork) is not PreparedMeshArtwork:
+            refuse("prepared mesh artwork must be an owned PreparedMeshArtwork")
+        prepared_mesh_artwork.verify(rgba, vertices, faces, face_support, marker, p,
+                                     max_chart_stretch=limit, owner=prepared_owner)
+        texture, derived = prepared_mesh_artwork._texture, prepared_mesh_artwork._marker
+        render_vertices, render_faces, render_support = (prepared_mesh_artwork._vertices,
+                                                         prepared_mesh_artwork._faces,
+                                                         prepared_mesh_artwork._support)
+        patch = prepared_mesh_artwork._patch
     h, w = rgb.shape[:2]
-    rendered = wg.render_marker_rgba(vertices, faces, face_support, derived, texture, K, pose,
+    rendered = wg.render_marker_rgba(render_vertices, render_faces, render_support, derived, texture, K, pose,
                                     w, h, mask, max_chart_stretch=limit,
-                                    artwork_region_raster=artwork_region_raster)
+                                     artwork_region_raster=artwork_region_raster,
+                                     _prepared_patch=patch)
     overlay, stats = rendered["rgba"], dict(rendered["stats"])
     alpha = overlay[:, :, 3].astype(np.float64) * (p["opacity"] / 255.0)
     alpha *= np.asarray(mask, bool)
@@ -304,7 +386,7 @@ def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker
 def export_saved_window(workspace, *, run_id, role, project_path, expected_revision, bundle_path,
                         bundle_sha256, admission_dir, output_dir, playback_fps, placement=None, repo_root=ROOT,
                         experimental_tracking=False, surface_mode="planar", max_chart_stretch=None,
-                        mesh_anchor_path=None, artwork_region_raster=False):
+                        mesh_anchor_path=None, artwork_region_raster=False, prepare_mesh_once=False):
     """Publish a new derived directory only after complete video decode and input reauthentication."""
     from . import workbench_cli as cli, workbench_frame_boundary as fb, workbench_neural as wn
     from .vision import cv2
@@ -317,8 +399,12 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
         refuse("surface_mode must be planar or mesh")
     if type(artwork_region_raster) is not bool:
         refuse("artwork_region_raster must be boolean")
+    if type(prepare_mesh_once) is not bool:
+        refuse("prepare_mesh_once must be boolean")
     if artwork_region_raster and surface_mode != "mesh":
         refuse("artwork_region_raster requires mesh surface mode")
+    if prepare_mesh_once and surface_mode != "mesh":
+        refuse("prepare_mesh_once requires mesh surface mode")
     if surface_mode == "planar" and max_chart_stretch is not None:
         refuse("max_chart_stretch requires mesh surface mode")
     if mesh_anchor_path is not None and surface_mode != "mesh":
@@ -446,14 +532,25 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
             saved_rows_sha256=state["files"]["results.jsonl"], epoch=0)
     project, rgba, project_sha, png_sha = _project(project_path, expected_revision)
     mesh_identity = None
+    prepared_mesh = None
+    prepared_owner = None
     if surface_mode == "mesh":
+        if prepare_mesh_once:
+            prepared_owner = f"{run_id}:{output}"
         def current_mesh_identity():
-            current_texture, current_marker = prepare_mesh_artwork(rgba, mesh_marker, placement)
+            if prepared_mesh is None:
+                current_texture, current_marker = prepare_mesh_artwork(rgba, mesh_marker, placement)
+            else:
+                prepared_mesh.verify(rgba, artwork.vertices, artwork.faces, artwork.support,
+                                     mesh_marker, placement, max_chart_stretch=max_chart_stretch,
+                                     owner=prepared_owner)
+                current_texture, current_marker = prepared_mesh._texture, prepared_mesh._marker
             h, w = rgba.shape[:2]
             edge = current_texture.shape[0]
             physical = float(current_marker["size_object_units"])
             identity = dict(surface_mode=surface_mode, max_chart_stretch=max_chart_stretch,
-                derived_marker=current_marker, derived_marker_sha256=wc.canonical_sha256(current_marker),
+                derived_marker=ar._plain(current_marker),
+                derived_marker_sha256=wc.canonical_sha256(ar._plain(current_marker)),
                 selected_rgba_sha256=wg.array_sha256(rgba), texture_sha256=wg.array_sha256(current_texture),
                 texture_shape=list(current_texture.shape), png_sha256=png_sha,
                 selected_shape=list(rgba.shape),
@@ -467,6 +564,8 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                 support_source="metric CAD geometry (not observation-derived)")
             if artwork_region_raster:
                 identity["artwork_region_raster"] = True
+            if prepare_mesh_once:
+                identity["prepare_mesh_once"] = True
             if mesh_anchor is not None:
                 identity["mesh_anchor_revision_sha256"] = wc.canonical_sha256(mesh_anchor)
             return identity
@@ -504,13 +603,21 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                 if _anchor_integrity(artwork) != anchor_sha:
                     refuse("anchor/chart changed before composition")
                 if surface_mode == "mesh":
+                    # Construct the selected-artwork patch only when a current
+                    # measured frame can actually render. All-lost exports keep
+                    # the historical preparation and original-RGB path.
+                    if prepare_mesh_once and prepared_mesh is None:
+                        prepared_mesh = prepare_mesh_artwork_state(rgba, artwork.vertices,
+                            artwork.faces, artwork.support, mesh_marker, placement,
+                            max_chart_stretch=max_chart_stretch, owner=prepared_owner)
                     if wc.canonical_sha256(current_mesh_identity()) != mesh_identity_sha:
                         refuse("mesh composition identity changed")
                     composite, reason, geometry_stats = compose_mesh(rgb, rgba, mask,
                         np.asarray(decision.pose, np.float64).reshape(4, 4), K, artwork.vertices,
                         artwork.faces, artwork.support, mesh_marker,
                         {**placement, "opacity": placement["opacity"] * decision.opacity},
-                        max_chart_stretch=max_chart_stretch, artwork_region_raster=artwork_region_raster)
+                        max_chart_stretch=max_chart_stretch, artwork_region_raster=artwork_region_raster,
+                        prepared_mesh_artwork=prepared_mesh, prepared_owner=prepared_owner)
                 else:
                     composite, reason, corners = compose_planar(rgb, rgba, mask, np.asarray(decision.pose, np.float64).reshape(4, 4), K,
                         artwork.vertices, artwork.faces, artwork.marker, {**placement, "opacity": placement["opacity"] * decision.opacity})
