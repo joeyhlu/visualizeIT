@@ -1013,6 +1013,11 @@ class _FrameTensorBytes:
         return torch.from_numpy(values)
 
 
+_FRAME_TENSOR_FULL_RESTORE = _FrameTensorBytes.restore
+_FRAME_TENSOR_FULL_LENGTH = _FrameTensorBytes._length
+_FRAME_TENSOR_FULL_DIGEST = _FrameTensorBytes._digest
+
+
 class WorkbenchIntegerRefiner:
     """Separate dispatch for ``workbench_integer_metric_v1`` (old registry untouched).
 
@@ -1030,6 +1035,7 @@ class WorkbenchIntegerRefiner:
         self._renderers: dict[str, Any] = {}
         self._preparation_scope = None
         self._prepared_frame = None
+        self._prepared_seals = None
 
     @contextmanager
     def preparation_scope(self, context_factory):
@@ -1042,11 +1048,84 @@ class WorkbenchIntegerRefiner:
             raise ValueError("frame preparation scopes cannot overlap")
         self._preparation_scope = context_factory
         self._prepared_frame = None
+        self._prepared_seals = None
         try:
             yield
         finally:
             self._prepared_frame = None
+            self._prepared_seals = None
             self._preparation_scope = None
+
+    @staticmethod
+    def _capture_preparation_seal(record):
+        # Frozen dataclasses alone are insufficient: callers can replace fields
+        # with object.__setattr__. Only these exact immutable field types qualify.
+        if (type(record) is not _FrameTensorBytes
+                or _FrameTensorBytes.restore is not _FRAME_TENSOR_FULL_RESTORE
+                or _FrameTensorBytes._length is not _FRAME_TENSOR_FULL_LENGTH
+                or _FrameTensorBytes._digest is not _FRAME_TENSOR_FULL_DIGEST
+                or type(FRAME_PREPARATION_MAX_TENSOR_BYTES) is not int):
+            return None
+        fields = record.__dict__
+        if type(fields) is not dict or any(name in fields for name in ("restore", "_length", "_digest")):
+            return None
+        storage, shape, strides, dtype, digest = (
+            fields.get("storage"), fields.get("shape"), fields.get("strides"),
+            fields.get("dtype"), fields.get("digest"))
+        if (type(storage) is not bytes or type(shape) is not tuple or type(strides) is not tuple
+                or not 1 <= len(shape) <= 4 or len(shape) != len(strides)
+                or any(type(value) is not int for value in shape + strides)
+                or type(dtype) is not str or type(digest) is not str):
+            return None
+        return record, storage, shape, strides, dtype, digest, FRAME_PREPARATION_MAX_TENSOR_BYTES
+
+    @staticmethod
+    def _preparation_seal_matches(record, seal):
+        if (type(seal) is not tuple or len(seal) != 7 or type(record) is not _FrameTensorBytes
+                or record is not seal[0] or _FrameTensorBytes.restore is not _FRAME_TENSOR_FULL_RESTORE
+                or _FrameTensorBytes._length is not _FRAME_TENSOR_FULL_LENGTH
+                or _FrameTensorBytes._digest is not _FRAME_TENSOR_FULL_DIGEST
+                or type(FRAME_PREPARATION_MAX_TENSOR_BYTES) is not int
+                or FRAME_PREPARATION_MAX_TENSOR_BYTES is not seal[6]):
+            return False
+        fields = record.__dict__
+        return (type(fields) is dict and not any(name in fields for name in ("restore", "_length", "_digest"))
+                and fields.get("storage") is seal[1] and fields.get("shape") is seal[2]
+                and fields.get("strides") is seal[3] and fields.get("dtype") is seal[4]
+                and fields.get("digest") is seal[5])
+
+    def _restore_preparation_record(self, record, seal, torch):
+        if self._preparation_seal_matches(record, seal):
+            # Read validated sealed references, never unchecked current fields.
+            values = np.ndarray(seal[2], dtype=np.dtype(seal[4]),
+                                buffer=bytearray(seal[1]), strides=seal[3])
+            return torch.from_numpy(values), seal
+        before = self._capture_preparation_seal(record)
+        # Public/direct restore keeps its full validation and observer behavior.
+        return record.restore(torch), before
+
+    def _restore_frame_inputs(self, torch):
+        seals = self._prepared_seals
+        if type(seals) is not tuple or len(seals) != 2:
+            seals = (None, None)
+        self._prepared_seals = None
+        # Keep the parent's left-to-right live record reads: the first callback
+        # may replace the second record, or mutate either record's metadata.
+        first = self._prepared_frame[1]
+        image, first_seal = self._restore_preparation_record(first, seals[0], torch)
+        second = self._prepared_frame[2]
+        input_mask, second_seal = self._restore_preparation_record(second, seals[1], torch)
+        # Both callbacks have completed. Never seal fields changed by an observer
+        # after validation, even when the parent legitimately returns that call.
+        frame = self._prepared_frame
+        if type(frame) is tuple and len(frame) == 3:
+            self._prepared_seals = (
+                first_seal if frame[1] is first
+                and self._preparation_seal_matches(first, first_seal) else None,
+                second_seal if frame[2] is second
+                and self._preparation_seal_matches(second, second_seal) else None,
+            )
+        return image, input_mask
 
     def _frame_inputs(self, case, torch):
         certificate = wc.canonical_sha256({
@@ -1057,12 +1136,13 @@ class WorkbenchIntegerRefiner:
             "context": self._preparation_scope(),
         })
         if self._prepared_frame is None or self._prepared_frame[0] != certificate:
+            self._prepared_seals = None
             # Use exactly the original Torch preparation operations and values.
             image = torch.from_numpy(np.ascontiguousarray(case["rgb"])).permute(2, 0, 1).float()[None] / 255
             input_mask = torch.from_numpy((np.asarray(case["mask"]) > 0).copy()).float()[None]
             self._prepared_frame = (certificate, _FrameTensorBytes.freeze(image),
                                     _FrameTensorBytes.freeze(input_mask))
-        return (self._prepared_frame[1].restore(torch), self._prepared_frame[2].restore(torch))
+        return self._restore_frame_inputs(torch)
 
     def _renderer(self, case):
         key = case["glb_sha256"]
@@ -1182,6 +1262,7 @@ class WorkbenchIntegerRefiner:
         finally:
             self._renderers.clear()
             self._prepared_frame = self._preparation_scope = None
+            self._prepared_seals = None
             self.network = None  # drop the network reference held by this runner
             self.renderer_factory = None
         if errors:

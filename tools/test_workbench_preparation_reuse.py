@@ -1,9 +1,11 @@
 """Model-free tests of estimate-local preparation reuse in the actual backend."""
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import replace
 from pathlib import Path
+import hashlib
+import subprocess
 import sys
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -116,9 +118,10 @@ class PreparationRuntime:
         self.calls.append("refine")
         return args[-2:]
 
-    def make_backend(self, enabled=False, **kwargs):
+    def make_backend(self, enabled=False, *, implementation=None, **kwargs):
+        module = implementation or neural
         runtime = self
-        class CapturingRefiner(neural.WorkbenchIntegerRefiner):
+        class CapturingRefiner(module.WorkbenchIntegerRefiner):
             def trace(self, case):
                 result = super().trace(case)
                 runtime.traces.append(result)
@@ -128,11 +131,12 @@ class PreparationRuntime:
         def renderer(case):
             self.calls.append("renderer")
             return SimpleNamespace(vertices_m=np.zeros((3, 3)))
-        self.backend = neural.GoTrackMetricBackend(
+        policy = {"preparation_reuse": enabled} if hasattr(module, "_FrameTensorBytes") else {}
+        self.backend = module.GoTrackMetricBackend(
             "primary_neural", self.bundle, head_path=Path("unused.pt"),
             network_loader=lambda device: (self.network, self.provenance),
             refiner_factory=lambda net, dev: CapturingRefiner(net, dev, renderer_factory=renderer),
-            preparation_reuse=enabled, **kwargs)
+            **policy, **kwargs)
         self.backend.seed_target_frame_id = "s000001"
         return self.backend
 
@@ -155,6 +159,167 @@ class PreparationRuntime:
         if state is None:
             state = {"_frame_id": "s000001"}
         return self.backend.estimate(self.rgb, self.mask, self.K, state)
+
+
+@contextmanager
+def accepted_neural(revision):
+    """Execute the actual pinned Git source as a separate, temporary module."""
+    expected = {
+        "1c4248c964ee0d10116d3628ee6059f76caa00f5":
+            "ecac8a3e10590b425d691fdfb13fbcbbd4e8ea027350dbf5311cf045394ad045",
+        "ce5c31f22bb3796d83c0ae57d381148cf55a4d84":
+            "96bcd0e4d4cd22a44b2522db4ab034a33051b638704505e5e26f9b5e998c33a2",
+    }
+    source = subprocess.check_output(["git", "show", revision + ":bench/workbench_neural.py"],
+                                     cwd=Path(__file__).resolve().parents[1])
+    if hashlib.sha256(source).hexdigest() != expected[revision]:
+        raise AssertionError("accepted neural source differs from its pinned blob")
+    name = "bench._preparation_control_" + revision[:8]
+    module = ModuleType(name)
+    module.__file__ = str(Path(neural.__file__).resolve())
+    module.__package__ = "bench"
+    with patch.dict(sys.modules, {name: module}):
+        exec(compile(source, module.__file__, "exec"), module.__dict__)
+        yield module
+
+
+class PreparationOperations:
+    """Observe actual source operations, never wall time or hardware traffic.
+
+    SHA metadata headers and canonical context bytes are counted separately and
+    excluded from payload bytes. Copy counts cover source hash .tobytes(), frozen
+    buffer writes/bytes(), and restored bytearray copies. They exclude fake
+    runtime copies, Torch work, allocator overhead and all crop/model activity.
+    """
+    def __init__(self, module, runtime):
+        self.module, self.runtime = module, runtime
+        self.kind = None
+        self.counts = {key: 0 for key in (
+            "sha_constructions", "sha_payload_bytes", "sha_metadata_bytes",
+            "prepared_digest_calls", "prepared_digest_bytes", "array_digest_calls", "array_digest_bytes",
+            "canonical_sha_calls", "canonical_json_calls", "freeze_calls", "working_restores",
+            "torch_bridges", "explicit_copy_bytes", "zero_fill_bytes")}
+        self.stack = ExitStack()
+
+    def __enter__(self):
+        module, runtime, counts = self.module, self.runtime, self.counts
+        original_sha = module.hashlib.sha256
+        original_array = module.array_digest
+        original_freeze = module._FrameTensorBytes.freeze
+        original_canonical_sha = module.wc.canonical_sha256
+        original_canonical_json = module.wc.canonical_json
+        original_ndarray = np.ndarray
+        original_contiguous = np.ascontiguousarray
+        observer = self
+
+        class ObservedHash:
+            def __init__(self, value=b"", *args, **kwargs):
+                counts["sha_constructions"] += 1
+                counts["sha_metadata_bytes"] += len(value)
+                # Accepted source uses repr((shape, strides, dtype)) as its
+                # prepared header. Observe the actual hash without replacing
+                # either purity-critical validation helper.
+                self.kind = ("prepared" if observer.kind is None and value.startswith((b"((", b"(["))
+                             else observer.kind)
+                if self.kind == "prepared":
+                    counts["prepared_digest_calls"] += 1
+                self.inner = original_sha(value, *args, **kwargs)
+
+            def update(self, value):
+                if self.kind in ("array", "prepared"):
+                    counts["sha_payload_bytes"] += len(value)
+                    if self.kind == "prepared":
+                        counts["prepared_digest_bytes"] += len(value)
+                else:
+                    counts["sha_metadata_bytes"] += len(value)
+                self.inner.update(value)
+
+            def hexdigest(self):
+                return self.inner.hexdigest()
+
+        @contextmanager
+        def operation(kind):
+            previous, observer.kind = observer.kind, kind
+            try:
+                yield
+            finally:
+                observer.kind = previous
+
+        def array_digest(value):
+            counts["array_digest_calls"] += 1
+            counts["array_digest_bytes"] += np.asarray(value).nbytes
+            with operation("array"):
+                return original_array(value)
+
+        def canonical_sha(value):
+            counts["canonical_sha_calls"] += 1
+            with operation("canonical"):
+                return original_canonical_sha(value)
+
+        def canonical_json(value):
+            counts["canonical_json_calls"] += 1
+            return original_canonical_json(value)
+
+        def freeze(cls, tensor):
+            counts["freeze_calls"] += 1
+            return original_freeze(tensor)
+
+        class ObservedBytearray(bytearray):
+            def __init__(self, value):
+                super().__init__(value)
+                self.from_length = type(value) is int
+                if self.from_length:
+                    counts["zero_fill_bytes"] += len(self)
+                else:
+                    counts["working_restores"] += 1
+                    counts["explicit_copy_bytes"] += len(self)
+
+            def __bytes__(self):
+                result = memoryview(self).tobytes()
+                counts["explicit_copy_bytes"] += len(result)
+                return result
+
+        class ObservedArray(original_ndarray):
+            def __array_finalize__(self, source):
+                self.frozen_write = getattr(source, "frozen_write", False)
+
+            def __setitem__(self, key, value):
+                super().__setitem__(key, value)
+                if self.frozen_write:
+                    counts["explicit_copy_bytes"] += self.nbytes
+
+            def tobytes(self, *args, **kwargs):
+                result = super().tobytes(*args, **kwargs)
+                if observer.kind == "array":
+                    counts["explicit_copy_bytes"] += len(result)
+                return result
+
+        def ndarray(*args, **kwargs):
+            result = original_ndarray(*args, **kwargs).view(ObservedArray)
+            buffer = kwargs.get("buffer")
+            result.frozen_write = isinstance(buffer, ObservedBytearray) and buffer.from_length
+            return result
+
+        def contiguous(*args, **kwargs):
+            result = original_contiguous(*args, **kwargs)
+            return result.view(ObservedArray) if observer.kind == "array" else result
+
+        original_bridge = sys.modules["torch"].from_numpy
+        def bridge(value):
+            counts["torch_bridges"] += 1
+            return original_bridge(value)
+
+        for target, name, replacement in (
+                (module.hashlib, "sha256", ObservedHash), (module, "array_digest", array_digest),
+                (module._FrameTensorBytes, "freeze", classmethod(freeze)),
+                (module.wc, "canonical_sha256", canonical_sha), (module.wc, "canonical_json", canonical_json),
+                (module, "bytearray", ObservedBytearray), (np, "ndarray", ndarray),
+                (np, "ascontiguousarray", contiguous), (sys.modules["torch"], "from_numpy", bridge)):
+            self.stack.enter_context(patch.object(target, name, replacement, create=True))
+        return self
+
+    def __exit__(self, *exc):
+        return self.stack.__exit__(*exc)
 
 
 class PreparationReuseTests(unittest.TestCase):
@@ -333,6 +498,271 @@ class PreparationReuseTests(unittest.TestCase):
                        replace(record, strides=(0, 1, 2, 3)), replace(record, digest="bad")):
             with self.assertRaises(ValueError):
                 broken.restore(SimpleNamespace(from_numpy=runtime.tensor))
+
+    def test_actual_operation_counts_against_loaded_ce5_on_640_by_480_inputs(self):
+        def observe(module):
+            runtime = PreparationRuntime()
+            runtime.rgb = np.arange(640 * 480 * 3, dtype=np.uint8).reshape(480, 640, 3)
+            runtime.mask = np.ones((480, 640), bool)
+            runtime.make_backend(True, implementation=module)
+            with runtime.installed(), PreparationOperations(module, runtime) as operations:
+                result = runtime.estimate()
+            self.assertEqual(result["status"], "recovering")
+            self.assertEqual(runtime.calls.count("network"), 5)
+            self.assertEqual(runtime.calls.count("crop"), 5)
+            self.assertEqual(runtime.calls.count("correspondences"), 5)
+            self.assertEqual(sum(isinstance(call, tuple) and call[0] == "ransac" for call in runtime.calls), 5)
+            return operations.counts
+        with accepted_neural("ce5c31f22bb3796d83c0ae57d381148cf55a4d84") as control:
+            old = observe(control)
+        new = observe(neural)
+        self.assertEqual((old["sha_constructions"], new["sha_constructions"]), (32, 24))
+        self.assertEqual((old["sha_payload_bytes"], new["sha_payload_bytes"]), (35635560, 15974760))
+        self.assertEqual((old["prepared_digest_calls"], new["prepared_digest_calls"]), (12, 4))
+        self.assertEqual(old["prepared_digest_bytes"] - new["prepared_digest_bytes"], 19660800)
+        unchanged = {"array_digest_calls": 15, "array_digest_bytes": 6144360,
+                     "canonical_sha_calls": 5, "canonical_json_calls": 5, "freeze_calls": 2,
+                     "working_restores": 10, "torch_bridges": 17,
+                     "explicit_copy_bytes": 40550760, "zero_fill_bytes": 4915200}
+        for name, expected in unchanged.items():
+            with self.subTest(operation=name):
+                self.assertEqual(old[name], expected)
+                self.assertEqual(new[name], expected)
+
+    def test_first_use_full_validation_refuses_each_corrupt_field(self):
+        mutations = {
+            "storage": lambda record: replace(record, storage=bytes(len(record.storage))),
+            "shape": lambda record: replace(record, shape=(99,)),
+            "strides": lambda record: replace(record, strides=tuple(value + 4 for value in record.strides)),
+            "dtype": lambda record: replace(record, dtype="<f8"),
+            "digest": lambda record: replace(record, digest="bad"),
+        }
+        for name, corrupt in mutations.items():
+            with self.subTest(field=name):
+                runtime = PreparationRuntime()
+                runtime.make_backend(True)
+                original = neural._FrameTensorBytes.freeze
+                calls = []
+                def freeze(cls, tensor):
+                    result = original(tensor)
+                    calls.append(result)
+                    return corrupt(result) if len(calls) == 1 else result
+                with runtime.installed(), patch.object(neural._FrameTensorBytes, "freeze", classmethod(freeze)), \
+                        self.assertRaises(ValueError):
+                    runtime.estimate()
+                self.assertEqual(runtime.calls.count("network"), 0)
+                self.assertIsNone(runtime.backend.refiner._prepared_seals)
+
+    def test_after_first_use_corruption_fails_before_next_crop(self):
+        for field, value in (("storage", b"bad"), ("shape", (99,)), ("strides", (1,)),
+                             ("dtype", "<f8"), ("digest", "bad")):
+            def after(runtime, refiner):
+                if len(runtime.traces) == 1:
+                    object.__setattr__(refiner._prepared_frame[1], field, value)
+            with self.subTest(field=field):
+                runtime = PreparationRuntime(after_trace=after)
+                runtime.make_backend(True)
+                with runtime.installed(), self.assertRaises(ValueError):
+                    runtime.estimate()
+                self.assertEqual(runtime.calls.count("network"), 1)
+                self.assertIsNone(runtime.backend.refiner._prepared_seals)
+
+    def test_valid_record_and_equal_field_replacements_require_full_revalidation(self):
+        changes = {
+            "record": lambda record: replace(record),
+            "storage": lambda record: replace(record, storage=bytes(bytearray(record.storage))),
+            "shape": lambda record: replace(record, shape=tuple(list(record.shape))),
+            "strides": lambda record: replace(record, strides=tuple(list(record.strides))),
+            "dtype": lambda record: replace(record, dtype=(" " + record.dtype)[1:]),
+            "digest": lambda record: replace(record, digest=(" " + record.digest)[1:]),
+        }
+        for name, change in changes.items():
+            def after(runtime, refiner):
+                if len(runtime.traces) == 1:
+                    previous = refiner._prepared_frame
+                    record = change(previous[1])
+                    if name != "record":
+                        # Replace the field on the same exact record, exercising
+                        # field identity rather than only record identity.
+                        object.__setattr__(previous[1], name, getattr(record, name))
+                    else:
+                        refiner._prepared_frame = previous[0], record, previous[2]
+            with self.subTest(field=name):
+                runtime = PreparationRuntime(after_trace=after)
+                runtime.make_backend(True)
+                with runtime.installed(), PreparationOperations(neural, runtime) as operations:
+                    runtime.estimate()
+                self.assertEqual(operations.counts["prepared_digest_calls"], 5)
+                self.assertEqual(runtime.calls.count("network"), 5)
+                self.assertIsNone(runtime.backend.refiner._prepared_seals)
+
+    def test_subclasses_mutable_metadata_and_restore_overrides_never_fast_trust(self):
+        class RecordSubclass(neural._FrameTensorBytes):
+            pass
+        class StringSubclass(str):
+            pass
+        cases = ("subclass", "list_shape", "str_subclass", "instance_override", "class_override")
+        for case in cases:
+            runtime = PreparationRuntime()
+            runtime.make_backend(True)
+            original_freeze = neural._FrameTensorBytes.freeze
+            original_restore = neural._FrameTensorBytes.restore
+            original_digest = neural._FrameTensorBytes._digest
+            overrides, records = [], []
+            def freeze(cls, tensor):
+                record = original_freeze(tensor)
+                records.append(record)
+                if len(records) == 1:
+                    if case == "subclass":
+                        record = RecordSubclass(**record.__dict__)
+                    elif case == "list_shape":
+                        record = replace(record, shape=list(record.shape))
+                        record = replace(record, digest=original_digest(
+                            record.storage, record.shape, record.strides, record.dtype))
+                    elif case == "str_subclass":
+                        record = replace(record, dtype=StringSubclass(record.dtype))
+                    elif case == "instance_override":
+                        def restore(torch):
+                            overrides.append(1)
+                            return original_restore(record, torch)
+                        object.__setattr__(record, "restore", restore)
+                return record
+            def restore_override(record, torch):
+                overrides.append(1)
+                return original_restore(record, torch)
+            with self.subTest(case=case), ExitStack() as stack:
+                stack.enter_context(runtime.installed())
+                stack.enter_context(patch.object(neural._FrameTensorBytes, "freeze", classmethod(freeze)))
+                operations = stack.enter_context(PreparationOperations(neural, runtime))
+                if case == "class_override":
+                    stack.enter_context(patch.object(neural._FrameTensorBytes, "restore", restore_override))
+                runtime.estimate()
+                expected = 12 if case == "class_override" else 9 if case == "list_shape" else 8
+                self.assertEqual(operations.counts["prepared_digest_calls"], expected)
+                if "override" in case:
+                    self.assertEqual(len(overrides), 10 if case == "class_override" else 5)
+                self.assertEqual(runtime.calls.count("network"), 5)
+
+    def test_direct_restore_always_validates_and_keeps_its_callback(self):
+        runtime = PreparationRuntime()
+        record = neural._FrameTensorBytes.freeze(runtime.tensor(np.ones((1, 3, 5, 6), np.float32)))
+        original_digest = neural._FrameTensorBytes._digest
+        with patch.object(neural._FrameTensorBytes, "_digest", wraps=original_digest) as digest:
+            for _ in range(5):
+                record.restore(SimpleNamespace(from_numpy=runtime.tensor))
+        self.assertEqual(digest.call_count, 5)
+        object.__setattr__(record, "digest", "bad")
+        with self.assertRaisesRegex(ValueError, "integrity check failed"):
+            record.restore(SimpleNamespace(from_numpy=lambda value: self.fail("corrupt tensor created")))
+
+    def test_operation_counts_keep_live_validation_on_invalidation_and_failure(self):
+        scenarios = {
+            "invalidated": (lambda r, refiner: r.mask.__setitem__((0, 0), not r.mask[0, 0]), None),
+            "failed_third_forward": (None, 2),
+        }
+        for name, (after, failure) in scenarios.items():
+            observed = []
+            with accepted_neural("ce5c31f22bb3796d83c0ae57d381148cf55a4d84") as control:
+                for module in (control, neural):
+                    runtime = PreparationRuntime(after_trace=after, fail_iteration=failure)
+                    runtime.make_backend(True, implementation=module)
+                    with runtime.installed(), PreparationOperations(module, runtime) as operations:
+                        if failure is None:
+                            runtime.estimate()
+                        else:
+                            with self.assertRaisesRegex(RuntimeError, "injected network error"):
+                                runtime.estimate()
+                    observed.append(operations.counts)
+            old, new = observed
+            with self.subTest(scenario=name):
+                for key in ("array_digest_calls", "array_digest_bytes", "canonical_sha_calls", "canonical_json_calls",
+                            "freeze_calls", "working_restores", "torch_bridges", "explicit_copy_bytes", "zero_fill_bytes"):
+                    self.assertEqual(old[key], new[key])
+                if failure is None:  # Every iteration changed the certificate; no seal can be reused.
+                    self.assertEqual(old["prepared_digest_calls"], 20)
+                    self.assertEqual(new["prepared_digest_calls"], 20)
+                    self.assertEqual(new["array_digest_calls"], 15)
+                else:
+                    self.assertEqual((old["prepared_digest_calls"], new["prepared_digest_calls"]), (8, 4))
+                    self.assertEqual(new["array_digest_calls"], 9)
+
+    def test_validation_cap_changes_preserve_original_failure_boundary(self):
+        original_cap = neural.FRAME_PREPARATION_MAX_TENSOR_BYTES
+        for when in ("before_preparation", "before_restore", "after_first", "mask_callback"):
+            def after(runtime, refiner):
+                if when == "after_first" and len(runtime.traces) == 1:
+                    neural.FRAME_PREPARATION_MAX_TENSOR_BYTES = 1
+            runtime = PreparationRuntime(after_trace=after)
+            runtime.make_backend(True)
+            original_tensor = runtime.tensor
+            original_freeze = neural._FrameTensorBytes.freeze
+            freezes = []
+            def tensor(value):
+                result = original_tensor(value)
+                if (when == "mask_callback" and runtime.backend.refiner._prepared_frame is not None
+                        and np.asarray(value).shape == (1, 5, 6)):
+                    neural.FRAME_PREPARATION_MAX_TENSOR_BYTES = 1
+                return result
+            def freeze(cls, value):
+                result = original_freeze(value)
+                freezes.append(result)
+                if when == "before_restore" and len(freezes) == 2:
+                    neural.FRAME_PREPARATION_MAX_TENSOR_BYTES = 1
+                return result
+            runtime.tensor = tensor
+            with self.subTest(when=when), patch.object(neural, "FRAME_PREPARATION_MAX_TENSOR_BYTES", original_cap), \
+                    runtime.installed(), patch.object(neural._FrameTensorBytes, "freeze", classmethod(freeze)):
+                if when == "before_preparation":
+                    neural.FRAME_PREPARATION_MAX_TENSOR_BYTES = 1
+                with self.assertRaisesRegex(ValueError, "frame preparation exceeds the 128 MiB per-tensor limit"):
+                    runtime.estimate()
+                self.assertEqual(runtime.calls.count("network"), int(when in ("after_first", "mask_callback")))
+                self.assertIsNone(runtime.backend.refiner._prepared_seals)
+
+    def test_equal_cap_identity_or_type_changes_require_full_validation(self):
+        original_cap = neural.FRAME_PREPARATION_MAX_TENSOR_BYTES
+        for replacement, expected in ((int(str(original_cap)), 6), (float(original_cap), 12)):
+            self.assertIsNot(replacement, original_cap)
+            def after(runtime, refiner):
+                if len(runtime.traces) == 1:
+                    neural.FRAME_PREPARATION_MAX_TENSOR_BYTES = replacement
+            runtime = PreparationRuntime(after_trace=after)
+            runtime.make_backend(True)
+            with self.subTest(cap_type=type(replacement).__name__), \
+                    patch.object(neural, "FRAME_PREPARATION_MAX_TENSOR_BYTES", original_cap), \
+                    runtime.installed(), PreparationOperations(neural, runtime) as operations:
+                runtime.estimate()
+            self.assertEqual(operations.counts["prepared_digest_calls"], expected)
+            self.assertEqual(runtime.calls.count("network"), 5)
+
+    def test_custom_validation_helpers_keep_full_call_semantics(self):
+        for name in ("_length", "_digest"):
+            original = getattr(neural._FrameTensorBytes, name)
+            for mode in ("class", "instance_before", "instance_after"):
+                calls, frozen = [], []
+                def helper(*args):
+                    calls.append(1)
+                    return original(*args)
+                def after(runtime, refiner):
+                    if mode == "instance_after" and len(runtime.traces) == 1:
+                        object.__setattr__(refiner._prepared_frame[1], name, helper)
+                runtime = PreparationRuntime(after_trace=after)
+                runtime.make_backend(True)
+                original_freeze = neural._FrameTensorBytes.freeze
+                def freeze(cls, value):
+                    result = original_freeze(value)
+                    frozen.append(result)
+                    if mode == "instance_before" and len(frozen) == 1:
+                        object.__setattr__(result, name, helper)
+                    return result
+                with self.subTest(helper=name, mode=mode), ExitStack() as stack:
+                    stack.enter_context(runtime.installed())
+                    stack.enter_context(patch.object(neural._FrameTensorBytes, "freeze", classmethod(freeze)))
+                    if mode == "class":
+                        stack.enter_context(patch.object(neural._FrameTensorBytes, name, staticmethod(helper)))
+                    runtime.estimate()
+                self.assertEqual(len(calls), 12 if mode == "class" else 5 if mode == "instance_before" else 4)
+                self.assertEqual(runtime.calls.count("network"), 5)
 
 
 if __name__ == "__main__":

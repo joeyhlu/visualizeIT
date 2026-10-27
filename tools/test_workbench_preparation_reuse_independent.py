@@ -45,9 +45,19 @@ class IndependentPreparationChecks(unittest.TestCase):
         sys.modules[name] = module
         exec(compile(raw, '<accepted-parent-1c4248c>', 'exec'), module.__dict__)
         cls.parent_module = module
+        raw = subprocess.check_output(['git', 'show',
+            'ce5c31f22bb3796d83c0ae57d381148cf55a4d84:bench/workbench_neural.py'], cwd=root)
+        if hashlib.sha256(raw).hexdigest() != '96bcd0e4d4cd22a44b2522db4ab034a33051b638704505e5e26f9b5e998c33a2':
+            raise AssertionError('Published P1-A source bytes differ')
+        name = 'bench._preparation_test_published_p1a'
+        module = ModuleType(name)
+        module.__file__, module.__package__ = neural.__file__, 'bench'
+        sys.modules[name] = module
+        exec(compile(raw, '<published-p1a-ce5c31f>', 'exec'), module.__dict__)
+        cls.published_module = module
 
-    def make_parent_backend(self, runtime):
-        parent = self.parent_module
+    def make_parent_backend(self, runtime, *, published=False, enabled=False):
+        parent = self.published_module if published else self.parent_module
         class CapturingParent(parent.WorkbenchIntegerRefiner):
             def trace(self, case):
                 result = super().trace(case)
@@ -58,17 +68,21 @@ class IndependentPreparationChecks(unittest.TestCase):
             return SimpleNamespace(vertices_m=np.zeros((3, 3)))
         runtime.backend = parent.GoTrackMetricBackend('primary_neural', runtime.bundle,
             head_path=Path('unused.pt'), network_loader=lambda device: (runtime.network, runtime.provenance),
-            refiner_factory=lambda network, device: CapturingParent(network, device, renderer_factory=renderer))
+            refiner_factory=lambda network, device: CapturingParent(network, device, renderer_factory=renderer),
+            **({'preparation_reuse': enabled} if published else {}))
         runtime.backend.seed_target_frame_id = 's000001'
 
     def test_exact_accepted_parent_and_both_candidate_arms_success_loss_error(self):
         for scenario in ('two-frame-success', 'loss', 'network-error'):
             records = []
-            for arm in ('accepted-parent', 'candidate-disabled', 'candidate-enabled'):
+            for arm in ('accepted-parent', 'published-disabled', 'published-enabled',
+                        'candidate-disabled', 'candidate-enabled'):
                 kwargs = {'valid_points': 23} if scenario == 'loss' else {'fail_iteration': 2} if scenario == 'network-error' else {}
                 runtime = PreparationRuntime(**kwargs)
                 if arm == 'accepted-parent':
                     self.make_parent_backend(runtime)
+                elif arm.startswith('published-'):
+                    self.make_parent_backend(runtime, published=True, enabled=arm == 'published-enabled')
                 else:
                     runtime.make_backend(arm == 'candidate-enabled')
                 state = {'_frame_id': 's000001'}
@@ -97,9 +111,119 @@ class IndependentPreparationChecks(unittest.TestCase):
                 self.assertEqual(runtime.calls.count('network'), expected_calls)
                 self.assertEqual(runtime.calls.count('crop'), expected_calls)
             self.assertEqual([x[0].rgb_preparations for x in records],
-                             [10, 10, 2] if scenario == 'two-frame-success' else [expected_calls, expected_calls, 1])
+                             [10, 10, 2, 10, 2] if scenario == 'two-frame-success' else
+                             [expected_calls, expected_calls, 1, expected_calls, 1])
             self.assertEqual([x[0].mask_preparations for x in records],
-                             [10, 10, 2] if scenario == 'two-frame-success' else [expected_calls, expected_calls, 1])
+                             [10, 10, 2, 10, 2] if scenario == 'two-frame-success' else
+                             [expected_calls, expected_calls, 1, expected_calls, 1])
+
+    def test_tensor_creation_observer_changes_match_published_parent(self):
+        # A tensor observer may mutate the live record/table while the original
+        # restore is returning. Capturing both records or trusting post-callback
+        # metadata early would hide these parent-visible changes.
+        for mutation in ('digest', 'storage-from-mask-callback', 'valid-replacement', 'table-none',
+                         'table-none-from-mask-callback', 'table-short-from-mask-callback',
+                         'delete-digest-from-mask-callback'):
+            records = []
+            for published in (True, False):
+                runtime = PreparationRuntime()
+                if published:
+                    self.make_parent_backend(runtime, published=True, enabled=True)
+                else:
+                    runtime.make_backend(True)
+                original_tensor = runtime.tensor
+                fired = []
+                def bridge(value):
+                    result = original_tensor(value)
+                    frame = runtime.backend.refiner._prepared_frame
+                    target = (1, 5, 6) if mutation.endswith('from-mask-callback') else (1, 3, 5, 6)
+                    if frame is not None and np.asarray(value).shape == target and not fired:
+                        fired.append(True)
+                        if mutation == 'digest':
+                            object.__setattr__(frame[1], 'digest', 'corrupt')
+                        elif mutation == 'storage-from-mask-callback':
+                            data = bytearray(frame[1].storage); data[0] ^= 1
+                            object.__setattr__(frame[1], 'storage', bytes(data))
+                        elif mutation == 'valid-replacement':
+                            fresh = replace(frame[1], storage=memoryview(frame[1].storage).tobytes())
+                            runtime.backend.refiner._prepared_frame = (frame[0], fresh, frame[2])
+                        elif mutation == 'table-short-from-mask-callback':
+                            runtime.backend.refiner._prepared_frame = (frame[0],)
+                        elif mutation == 'delete-digest-from-mask-callback':
+                            object.__delattr__(frame[1], 'digest')
+                        else:
+                            runtime.backend.refiner._prepared_frame = None
+                    return result
+                runtime.tensor = bridge
+                state = {'_frame_id': 's000001'}
+                error = None
+                output = None
+                with runtime.installed():
+                    try:
+                        output = runtime.estimate(state)
+                    except (ValueError, TypeError, IndexError, AttributeError) as exc:
+                        error = (type(exc).__name__, str(exc))
+                self.assertEqual(fired, [True])
+                self.assertIsNone(runtime.backend.refiner._prepared_frame)
+                records.append((runtime, state, output, error))
+            with self.subTest(mutation=mutation):
+                compare_nested(self, records[0][1:], records[1][1:])
+                self.assertEqual(records[0][0].calls, records[1][0].calls)
+                self.assertEqual(records[1][0].calls.count('network'),
+                                 5 if mutation in ('valid-replacement', 'table-none-from-mask-callback')
+                                 else 0 if mutation == 'table-none' else 1)
+
+    def test_live_validation_policy_changes_keep_parent_refusal_and_cleanup(self):
+        for mutation in ('cap', 'class-digest', 'class-length', 'instance-digest', 'instance-length'):
+            records = []
+            for published in (True, False):
+                module = self.published_module if published else neural
+                original_cap = module.FRAME_PREPARATION_MAX_TENSOR_BYTES
+                original_digest = module._FrameTensorBytes.__dict__['_digest']
+                original_length = module._FrameTensorBytes.__dict__['_length']
+                runtime = PreparationRuntime()
+                if published:
+                    self.make_parent_backend(runtime, published=True, enabled=True)
+                else:
+                    runtime.make_backend(True)
+                original_tensor = runtime.tensor
+                fired = []
+                def fail(*args):
+                    raise RuntimeError('injected validation policy changed')
+                def bridge(value):
+                    result = original_tensor(value)
+                    frame = runtime.backend.refiner._prepared_frame
+                    if frame is not None and np.asarray(value).shape == (1, 5, 6) and not fired:
+                        fired.append(True)
+                        if mutation == 'cap':
+                            module.FRAME_PREPARATION_MAX_TENSOR_BYTES = 1
+                        elif mutation.startswith('class-'):
+                            setattr(module._FrameTensorBytes, '_'+mutation.split('-')[1], staticmethod(fail))
+                        else:
+                            object.__setattr__(frame[1], '_'+mutation.split('-')[1], fail)
+                    return result
+                runtime.tensor = bridge
+                state = {'_frame_id': 's000001'}
+                error = None
+                try:
+                    with runtime.installed():
+                        try:
+                            runtime.estimate(state)
+                        except (ValueError, RuntimeError) as exc:
+                            error = (type(exc).__name__, str(exc))
+                finally:
+                    module.FRAME_PREPARATION_MAX_TENSOR_BYTES = original_cap
+                    module._FrameTensorBytes._digest = original_digest
+                    module._FrameTensorBytes._length = original_length
+                self.assertEqual(fired, [True])
+                self.assertIsNotNone(error)
+                self.assertEqual(runtime.calls.count('network'), 1)
+                self.assertIsNone(runtime.backend.refiner._prepared_frame)
+                self.assertIsNone(getattr(runtime.backend.refiner, '_prepared_seals', None))
+                records.append((runtime, state, error))
+            with self.subTest(mutation=mutation):
+                compare_nested(self, records[0][1:], records[1][1:])
+                self.assertEqual(records[0][0].calls, records[1][0].calls)
 
     def test_retained_bytes_own_values_and_restore_positive_strided_layout(self):
         # A gapped, permuted float32 layout exercises real storage bounds rather

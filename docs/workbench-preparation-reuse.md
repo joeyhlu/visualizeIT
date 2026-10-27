@@ -49,14 +49,47 @@ same values, layout and CPU float32 dtype. Upstream mutation therefore cannot
 poison a subsequent iteration's retained input. Primary and baseline backends
 keep their own frame-local state.
 
-Restoration checks layout, byte bounds and integrity. Corrupt or incompatible
-prepared data refuses safely, with scope cleanup. This does not authorize
-fallback to older weights, stale masks or predicted poses. Original decoded
-inputs and saved results are not rewritten.
+Direct restoration and each record's first use check layout, byte bounds and
+integrity. After both first-use tensor callbacks return, the refiner may retain
+the exact immutable field references of validated records. Later uses check
+record/field identity, original validation implementations and the unchanged
+preparation-size limit before constructing a fresh writable buffer from those
+validated references. No caller-supplied
+"validated" flag grants this trust.
+
+Replaced records, changed metadata or size limits, subclasses and validation
+overrides take the original full-validation path. Corrupt or incompatible prepared data refuses
+safely, with scope cleanup. Fields are captured before validation and checked
+again after both callbacks; a callback change does not become trusted metadata
+or introduce an earlier exception. In particular, a callback that replaces the
+second live record keeps the original left-to-right access behaviour.
+
+All live RGB/mask/K and type-sensitive context checks remain per iteration.
+This does not authorize fallback to older weights, stale masks or predicted
+poses. Original decoded inputs and saved results are not rewritten.
 
 Hashing, serialization and fresh-buffer copies have a cost. They can erase the
 benefit of avoiding repeated conversion. No performance gain follows from fewer
 preparation calls in a software test.
+
+For a stable 640x480 frame and five iterations, deterministic injected-runtime
+operation instrumentation compares the published P1-A implementation with the
+first-use validation successor:
+
+| Logical work | Published P1-A | First-use validation |
+|---|---:|---:|
+| SHA constructions | 32 | 24 |
+| SHA payload bytes, excluding metadata | 35,635,560 | 15,974,760 |
+| Live array digests | 15 | 15 |
+| Canonical context serializations | 5 | 5 |
+| Explicit copy bytes | 40,550,760 | 40,550,760 |
+| Explicit zero-fill bytes | 4,915,200 | 4,915,200 |
+| Torch `from_numpy` bridges | 17 | 17 |
+
+First-use validation is retained: four later payload rechecks are removed, not
+five. These are operation and logical byte counts, not measured time, bandwidth
+or an empirical speedup. Invalidation and failed-frame paths have separate work
+counts. Working copies, masks, five forwards and all pose-dependent work remain.
 
 ## Software checks and promotion
 
@@ -68,10 +101,12 @@ buffer isolation. They do not execute the neural model.
 
 The independent module also loads the exact accepted parent neural source from
 Git commit `1c4248c964ee0d10116d3628ee6059f76caa00f5` and verifies its file
-SHA-256 before execution with injected components. Both candidate arms are
-compared against that implementation, including two-frame tracking, solver loss
-and a network exception. The parent Git object must be available; a missing or
-different parent fails this control rather than silently skipping it.
+SHA-256 before execution with injected components. It additionally loads the
+published P1-A control at `ce5c31f22bb3796d83c0ae57d381148cf55a4d84`.
+Parent, published flag-off/on, and successor flag-off/on arms are compared,
+including two-frame tracking, solver loss, network exceptions and tensor-observer
+mutations. Both Git objects must be available; a missing or different parent
+fails these controls rather than silently skipping them.
 
 ```text
 python -B -m unittest tools.test_workbench_preparation_reuse
