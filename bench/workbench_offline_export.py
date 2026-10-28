@@ -344,12 +344,14 @@ def prepare_mesh_artwork_state(rgba, vertices, faces, face_support, marker, plac
 
 def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker,
                  placement=None, *, max_chart_stretch=None, artwork_region_raster=False,
-                 prepared_mesh_artwork=None, prepared_owner=None, batched_raster=False):
+                 prepared_mesh_artwork=None, prepared_owner=None, batched_raster=False, sparse_blend=False):
     """Actual registered mesh visibility and straight-alpha, half-up RGB composition."""
     if type(artwork_region_raster) is not bool:
         refuse("artwork_region_raster must be boolean")
     if type(batched_raster) is not bool:
         refuse("batched_raster must be boolean")
+    if type(sparse_blend) is not bool:
+        refuse("sparse_blend must be boolean")
     p = placement_values(placement)
     limit = wg.check_chart_stretch_limit(max_chart_stretch)
     if not isinstance(rgb, np.ndarray) or rgb.dtype != np.uint8 or rgb.ndim != 3 or rgb.shape[2] != 3:
@@ -381,8 +383,18 @@ def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker
     stats["composited_pixels"] = int(np.count_nonzero(alpha > 0))
     if not stats["composited_pixels"]:
         return rgb.copy(), "mesh_" + (stats.get("reason") or "empty_or_outside_observed_mask"), stats
-    result = np.floor(overlay[:, :, :3].astype(np.float64)*alpha[:, :, None]
-                      + rgb.astype(np.float64)*(1-alpha[:, :, None]) + .5).astype(np.uint8)
+    if sparse_blend and type(rgb) is np.ndarray:
+        # Zero-alpha pixels reproduce the source RGB exactly in the dense
+        # expression. Keep identical float64 operations on the painted rows.
+        active = alpha > 0
+        a = alpha[active, None]
+        result = rgb.copy()
+        result[active] = np.floor(overlay[:, :, :3][active].astype(np.float64)*a
+                                  + rgb[active].astype(np.float64)*(1-a) + .5).astype(np.uint8)
+    else:
+        # Preserve ndarray-subclass dispatch and the historical default path.
+        result = np.floor(overlay[:, :, :3].astype(np.float64)*alpha[:, :, None]
+                          + rgb.astype(np.float64)*(1-alpha[:, :, None]) + .5).astype(np.uint8)
     return result, "rendered_mesh_artwork", stats
 
 
@@ -390,7 +402,7 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                         bundle_sha256, admission_dir, output_dir, playback_fps, placement=None, repo_root=ROOT,
                         experimental_tracking=False, surface_mode="planar", max_chart_stretch=None,
                         mesh_anchor_path=None, artwork_region_raster=False, prepare_mesh_once=False,
-                        batched_raster=False):
+                        batched_raster=False, sparse_blend=False):
     """Publish a new derived directory only after complete video decode and input reauthentication."""
     from . import workbench_cli as cli, workbench_frame_boundary as fb, workbench_neural as wn
     from .vision import cv2
@@ -407,8 +419,12 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
         refuse("prepare_mesh_once must be boolean")
     if type(batched_raster) is not bool:
         refuse("batched_raster must be boolean")
+    if type(sparse_blend) is not bool:
+        refuse("sparse_blend must be boolean")
     if batched_raster and surface_mode != "mesh":
         refuse("batched_raster requires mesh surface mode")
+    if sparse_blend and surface_mode != "mesh":
+        refuse("sparse_blend requires mesh surface mode")
     if artwork_region_raster and surface_mode != "mesh":
         refuse("artwork_region_raster requires mesh surface mode")
     if prepare_mesh_once and surface_mode != "mesh":
@@ -576,6 +592,8 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                 identity["prepare_mesh_once"] = True
             if batched_raster:
                 identity["batched_raster"] = True
+            if sparse_blend:
+                identity["sparse_blend"] = True
             if mesh_anchor is not None:
                 identity["mesh_anchor_revision_sha256"] = wc.canonical_sha256(mesh_anchor)
             return identity
@@ -629,6 +647,7 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                         {**placement, "opacity": placement["opacity"] * decision.opacity},
                         max_chart_stretch=max_chart_stretch, artwork_region_raster=artwork_region_raster,
                         batched_raster=batched_raster,
+                        sparse_blend=sparse_blend,
                         prepared_mesh_artwork=prepared_mesh, prepared_owner=prepared_owner)
                 else:
                     composite, reason, corners = compose_planar(rgb, rgba, mask, np.asarray(decision.pose, np.float64).reshape(4, 4), K,
