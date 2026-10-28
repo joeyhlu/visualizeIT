@@ -259,9 +259,14 @@ def _clip_near(cam: np.ndarray, near: float) -> list[tuple[np.ndarray, np.ndarra
 
 def rasterize(vertices: np.ndarray, faces: np.ndarray, K: np.ndarray, pose: np.ndarray,
               width: int, height: int, *, near: float = 1e-3,
-              roi: tuple[int, int, int, int] | None = None) -> RasterResult:
+              roi: tuple[int, int, int, int] | None = None, batched: bool = False) -> RasterResult:
     """Rasterize; ``roi=(x0, y0, x1, y1)`` (inclusive pixel bounds) restricts work
     to a window without changing results inside it."""
+    if type(batched) is not bool:
+        raise GeometryError("batched must be bool")
+    if batched:
+        from .workbench_raster_batch import rasterize as batched_rasterize
+        return batched_rasterize(vertices, faces, K, pose, width, height, near=near, roi=roi)
     K = check_K(K)
     if near <= 0 or not math.isfinite(near):
         raise GeometryError("near plane must be positive")
@@ -720,6 +725,7 @@ def render_marker_rgba(vertices, faces, face_support, marker: Mapping[str, Any],
                        patch: dict | None = None, min_support: int = 3,
                        max_chart_stretch: float | None = None,
                         artwork_region_raster: bool = False,
+                        batched_raster: bool = False,
                         _prepared_patch: Mapping[str, Any] | None = None) -> dict:
     """Sample straight RGBA on the supported, depth-tested actual mesh.
 
@@ -734,6 +740,8 @@ def render_marker_rgba(vertices, faces, face_support, marker: Mapping[str, Any],
     """
     if type(artwork_region_raster) is not bool:
         raise GeometryError("artwork_region_raster must be bool")
+    if type(batched_raster) is not bool:
+        raise GeometryError("batched_raster must be bool")
     art = np.asarray(artwork_rgba)
     if art.dtype != np.uint8 or art.ndim != 3 or art.shape[2] != 4:
         raise GeometryError("artwork must be RGBA uint8")
@@ -761,9 +769,11 @@ def render_marker_rgba(vertices, faces, face_support, marker: Mapping[str, Any],
                        int(math.floor(uv[:, 1].min())) - 1,
                        int(math.ceil(uv[:, 0].max())) + 1,
                        int(math.ceil(uv[:, 1].max())) + 1)
-            raster = rasterize(vertices, faces, K, pose, width, height, roi=roi)
+            raster = rasterize(vertices, faces, K, pose, width, height, roi=roi,
+                               **({'batched': True} if batched_raster else {}))
         else:
-            raster = rasterize(vertices, faces, K, pose, width, height)
+            raster = rasterize(vertices, faces, K, pose, width, height,
+                               **({'batched': True} if batched_raster else {}))
     # render_marker refreshes patches under a stretch guard for public callers.
     # The export has already bound and checked this prepared patch, so avoid
     # rebuilding it in either texture pass while preserving the final stats.

@@ -344,10 +344,12 @@ def prepare_mesh_artwork_state(rgba, vertices, faces, face_support, marker, plac
 
 def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker,
                  placement=None, *, max_chart_stretch=None, artwork_region_raster=False,
-                 prepared_mesh_artwork=None, prepared_owner=None):
+                 prepared_mesh_artwork=None, prepared_owner=None, batched_raster=False):
     """Actual registered mesh visibility and straight-alpha, half-up RGB composition."""
     if type(artwork_region_raster) is not bool:
         refuse("artwork_region_raster must be boolean")
+    if type(batched_raster) is not bool:
+        refuse("batched_raster must be boolean")
     p = placement_values(placement)
     limit = wg.check_chart_stretch_limit(max_chart_stretch)
     if not isinstance(rgb, np.ndarray) or rgb.dtype != np.uint8 or rgb.ndim != 3 or rgb.shape[2] != 3:
@@ -371,6 +373,7 @@ def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker
     rendered = wg.render_marker_rgba(render_vertices, render_faces, render_support, derived, texture, K, pose,
                                     w, h, mask, max_chart_stretch=limit,
                                      artwork_region_raster=artwork_region_raster,
+                                     batched_raster=batched_raster,
                                      _prepared_patch=patch)
     overlay, stats = rendered["rgba"], dict(rendered["stats"])
     alpha = overlay[:, :, 3].astype(np.float64) * (p["opacity"] / 255.0)
@@ -386,7 +389,8 @@ def compose_mesh(rgb, rgba, mask, pose, K, vertices, faces, face_support, marker
 def export_saved_window(workspace, *, run_id, role, project_path, expected_revision, bundle_path,
                         bundle_sha256, admission_dir, output_dir, playback_fps, placement=None, repo_root=ROOT,
                         experimental_tracking=False, surface_mode="planar", max_chart_stretch=None,
-                        mesh_anchor_path=None, artwork_region_raster=False, prepare_mesh_once=False):
+                        mesh_anchor_path=None, artwork_region_raster=False, prepare_mesh_once=False,
+                        batched_raster=False):
     """Publish a new derived directory only after complete video decode and input reauthentication."""
     from . import workbench_cli as cli, workbench_frame_boundary as fb, workbench_neural as wn
     from .vision import cv2
@@ -401,6 +405,10 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
         refuse("artwork_region_raster must be boolean")
     if type(prepare_mesh_once) is not bool:
         refuse("prepare_mesh_once must be boolean")
+    if type(batched_raster) is not bool:
+        refuse("batched_raster must be boolean")
+    if batched_raster and surface_mode != "mesh":
+        refuse("batched_raster requires mesh surface mode")
     if artwork_region_raster and surface_mode != "mesh":
         refuse("artwork_region_raster requires mesh surface mode")
     if prepare_mesh_once and surface_mode != "mesh":
@@ -566,12 +574,15 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                 identity["artwork_region_raster"] = True
             if prepare_mesh_once:
                 identity["prepare_mesh_once"] = True
+            if batched_raster:
+                identity["batched_raster"] = True
             if mesh_anchor is not None:
                 identity["mesh_anchor_revision_sha256"] = wc.canonical_sha256(mesh_anchor)
             return identity
         mesh_identity = current_mesh_identity()
         mesh_identity_sha = wc.canonical_sha256(mesh_identity)
-    sources = service._source_hashes(SOURCES)
+    render_sources = (*SOURCES, "bench/workbench_raster_batch.py") if batched_raster else SOURCES
+    sources = service._source_hashes(render_sources)
     # Conservative incompressible frame allowance + container/index/sidecar headroom.
     frame_allowance = clip.width * clip.height * 8 + 65536
     estimate = len(ids) * (frame_allowance + 32768) + (4 << 20)
@@ -617,6 +628,7 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
                         artwork.faces, artwork.support, mesh_marker,
                         {**placement, "opacity": placement["opacity"] * decision.opacity},
                         max_chart_stretch=max_chart_stretch, artwork_region_raster=artwork_region_raster,
+                        batched_raster=batched_raster,
                         prepared_mesh_artwork=prepared_mesh, prepared_owner=prepared_owner)
                 else:
                     composite, reason, corners = compose_planar(rgb, rgba, mask, np.asarray(decision.pose, np.float64).reshape(4, 4), K,
@@ -666,7 +678,7 @@ def export_saved_window(workspace, *, run_id, role, project_path, expected_revis
             if current_tracking["surface"] != tracking["surface"]:
                 refuse("experimental surface identity changed before publication")
         fresh = cli.MaskStore(workspace, clip.clip_id, mask_set)
-        if (after["files"] != state["files"] or service._source_hashes(SOURCES) != sources
+        if (after["files"] != state["files"] or service._source_hashes(render_sources) != sources
                 or ar._sha_file(workspace.clip_path(clip.clip_id), ar.MAX_SMALL_JSON_BYTES) != clip_sha
                 or service._admission_contract(contract["contract_sha256"]) != contract
                 or service._producer_sources(after["report"], (after["report"].get("stages") or {}).get(role) or {}, contract) != producer

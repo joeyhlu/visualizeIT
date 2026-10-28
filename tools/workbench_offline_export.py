@@ -24,6 +24,8 @@ def main(argv=None):
         help="Restrict mesh raster work to the artwork region; mesh only")
     parser.add_argument("--prepare-mesh-once", action="store_true",
         help="Reuse immutable mesh artwork preparation within one export; mesh only")
+    parser.add_argument("--batched-raster", action="store_true",
+        help="Experimental bounded NumPy mesh raster; reference fallback for exceptional geometry")
     parser.add_argument("--mesh-anchor", type=Path, help="Reviewed seed-frame workbench_mesh_anchor_v1 JSON; mesh only")
     parser.add_argument("--max-chart-stretch", type=float, help="Optional finite stretch cap >=1; mesh only")
     parser.add_argument("--experimental-tracking", action="store_true",
@@ -36,7 +38,8 @@ def main(argv=None):
             playback_fps=args.playback_fps, placement=json.loads(args.placement) if args.placement else None,
             experimental_tracking=args.experimental_tracking, surface_mode=args.surface_mode,
             max_chart_stretch=args.max_chart_stretch, mesh_anchor_path=args.mesh_anchor,
-            artwork_region_raster=args.artwork_region_raster, prepare_mesh_once=args.prepare_mesh_once)
+            artwork_region_raster=args.artwork_region_raster, prepare_mesh_once=args.prepare_mesh_once,
+            batched_raster=args.batched_raster)
         print(json.dumps(dict(status="verified", output=str(args.output.resolve()), video=result["video"], frames=len(result["rows"]))))
         return 0
     except Exception as exc:
